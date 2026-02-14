@@ -1,9 +1,12 @@
-#LLM based orderJSON extraction
-# used ollama model phi 
-#worked
+# #LLM based orderJSON
+# # used ollama model phi 
+# #worked
+# #still wants work on it for chat version 
+
 import requests
 import json
 import re
+
 
 def extract_order(user_message):
 
@@ -26,11 +29,46 @@ User message: "{user_message}"
     output = response.json()["response"]
 
     # ✅ Extract JSON part only
-    match = re.search(r"\{.*\}", output, re.DOTALL)
+    match = re.search(r"\{.*?\}", output, re.DOTALL)
 
     if match:
         json_text = match.group()
-        return json.loads(json_text)
+        try:
+            parsed = json.loads(json_text)
+            if not isinstance(parsed, dict):
+                return {"error": "Invalid JSON shape", "raw_output": output}
+
+            medicine_name = str(parsed.get("medicine_name", "")).strip()
+
+            try:
+                quantity = int(parsed.get("quantity", 1))
+            except (TypeError, ValueError):
+                quantity = 1
+
+            unit_raw = str(parsed.get("unit", "strip")).strip().lower()
+            unit_map = {
+                "strip": "strip",
+                "strips": "strip",
+                "stirp": "strip",
+                "stirps": "strip",
+                "tablet": "tablet",
+                "tablets": "tablet",
+                "bottle": "bottle",
+                "bottles": "bottle",
+            }
+            unit = unit_map.get(unit_raw, "strip")
+
+            return {
+                "medicine_name": medicine_name,
+                "quantity": quantity,
+                "unit": unit,
+            }
+        except json.JSONDecodeError:
+            return {
+                "error": "Invalid JSON returned by model",
+                "raw_output": output,
+                "json_text": json_text,
+            }
 
     return {
         "error": "No JSON found",
@@ -38,4 +76,53 @@ User message: "{user_message}"
     }
 
 
-print(extract_order("I need ghf two daily , 28 strips "))
+# print(extract_order("I need paracetamol 28 strips "))
+
+
+# import requests
+# import json
+# import re
+
+# def extract_order(user_message):
+
+#     response = requests.post(
+#         "http://localhost:11434/api/chat",
+#         json={
+#             "model": "phi",
+#             "messages": [
+#                 {
+#                     "role": "system",
+#                     "content": "Return ONLY a JSON object with medicine_name, quantity, unit, priscription"
+#                 },
+#                 {
+#                     "role": "user",
+#                     "content": f"""
+# Extract:
+# - medicine_name
+# - quantity
+# - unit
+
+# Message: "{user_message}"
+# """
+#                 }
+#             ],
+#             "stream": False
+#         }
+#     )
+
+#     output = response.json()["message"]["content"]
+
+#     print("\nRAW OUTPUT FROM OLLAMA:\n", output)
+
+#     # ✅ Extract JSON object only
+#     match = re.search(r"\{.*?\}", output, re.DOTALL)
+
+#     if match:
+#         json_text = match.group()
+#         return json.loads(json_text)
+
+#     return {"error": "No valid JSON found", "raw_output": output}
+
+
+# # Test
+# print(extract_order("I want Cetirizine 28 strips only"))

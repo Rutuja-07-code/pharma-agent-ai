@@ -1,42 +1,31 @@
 #fast API entry point
-#auto edited
-#needs editing
-import pandas as pd
-import random
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR.parent / "data"
-INPUT_FILE = DATA_DIR / "products-export.xlsx"
-OUTPUT_FILE = DATA_DIR / "medicine_master.csv"
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-# Load your dataset
-df = pd.read_excel(INPUT_FILE)
+from pharmacy_agent import pharmacy_chatbot
 
-# Normalize column names for safer matching
-df.columns = (
-    df.columns.astype(str)
-    .str.strip()
-    .str.lower()
-    .str.replace(r"\s+", " ", regex=True)
-)
+app = FastAPI(title="Agentic AI Pharmacy System")
 
-# Rename for simplicity
-df = df.rename(columns={"product name": "medicine_name", "medicine name": "medicine_name"})
+# Request format from frontend
+class ChatRequest(BaseModel):
+    message: str
 
-# Keep only useful column
-df = df[["medicine_name"]]
+# Response format back to frontend
+class ChatResponse(BaseModel):
+    reply: str
 
-# Add dummy stock levels (random)
-df["stock"] = [random.randint(10, 100) for _ in range(len(df))]
 
-# Add dummy prescription flags
-df["prescription_required"] = [
-    random.choice(["Yes", "No"]) for _ in range(len(df))
-]
+@app.get("/")
+def home():
+    return {"status": "Pharmacy Agent Backend Running"}
 
-# Save cleaned file
-df.to_csv(OUTPUT_FILE, index=False)
 
-print("✅ Medicine Master Data Ready!")
-print(df.head())
+@app.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    user_message = req.message
+
+    # Call your agent pipeline
+    bot_reply = pharmacy_chatbot(user_message)
+
+    return {"reply": bot_reply}
