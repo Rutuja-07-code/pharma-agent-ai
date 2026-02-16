@@ -1,140 +1,78 @@
 # #LLM based orderJSON
 # # used ollama model phi 
 # #worked
-# #still wants work on it for chat version 
-
-# import requests
-# import json
-# import re
 
 
-# def extract_order(user_message):
-
-#     prompt = f"""
-# Extract medicine_name, quantity, unit.
-# Return ONLY JSON object.
-
-# User message: "{user_message}"
-# """
-
-#     response = requests.post(
-#         "http://localhost:11434/api/generate",
-#         json={
-#             "model": "phi",
-#             "prompt": prompt,
-#             "stream": False
-#         }
-#     )
-
-#     output = response.json()["response"]
-
-#     # ✅ Extract JSON part only
-#     match = re.search(r"\{.*?\}", output, re.DOTALL)
-
-#     if match:
-#         json_text = match.group()
-#         try:
-#             parsed = json.loads(json_text)
-#             if not isinstance(parsed, dict):
-#                 return {"error": "Invalid JSON shape", "raw_output": output}
-
-#             medicine_name = str(parsed.get("medicine_name", "")).strip()
-
-#             try:
-#                 quantity = int(parsed.get("quantity", 1))
-#             except (TypeError, ValueError):
-#                 quantity = 1
-
-#             unit_raw = str(parsed.get("unit", "strip")).strip().lower()
-#             unit_map = {
-#                 "strip": "strip",
-#                 "strips": "strip",
-#                 "stirp": "strip",
-#                 "stirps": "strip",
-#                 "tablet": "tablet",
-#                 "tablets": "tablet",
-#                 "bottle": "bottle",
-#                 "bottles": "bottle",
-#             }
-#             unit = unit_map.get(unit_raw, "strip")
-
-#             return {
-#                 "medicine_name": medicine_name,
-#                 "quantity": quantity,
-#                 "unit": unit,
-#             }
-#         except json.JSONDecodeError:
-#             return {
-#                 "error": "Invalid JSON returned by model",
-#                 "raw_output": output,
-#                 "json_text": json_text,
-#             }
-
-#     return {
-#         "error": "No JSON found",
-#         "raw_output": output
-#     }
-# print(extract_order("I need paracetamol 28 strips "))
-
-
-
-
-
-
-# import requests
-# import json
-# import re
-
-# def extract_order(user_message):
-
-#     response = requests.post(
-#         "http://localhost:11434/api/chat",
-#         json={
-#             "model": "phi",
-#             "messages": [
-#                 {
-#                     "role": "system",
-#                     "content": "Return ONLY a JSON object with medicine_name, quantity, unit, priscription"
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": f"""
-# Extract:
-# - medicine_name
-# - quantity
-# - unit
-
-# Message: "{user_message}"
-# """
-#                 }
-#             ],
-#             "stream": False
-#         }
-#     )
-
-#     output = response.json()["message"]["content"]
-
-#     print("\nRAW OUTPUT FROM OLLAMA:\n", output)
-
-#     # ✅ Extract JSON object only
-#     match = re.search(r"\{.*?\}", output, re.DOTALL)
-
-#     if match:
-#         json_text = match.group()
-#         return json.loads(json_text)
-
-#     return {"error": "No valid JSON found", "raw_output": output}
-
-
-# # Test
-# print(extract_order("I want Cetirizine 28 strips only"))
-
-
-
-
-
-import requests
+import ast
 import json
+import re
+import requests
+
+
+def _extract_json_dict(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # Some models return Python dict text with single quotes.
+    try:
+        parsed = ast.literal_eval(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except (SyntaxError, ValueError):
+        pass
+
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+
+    try:
+        parsed = json.loads(match.group(0))
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        try:
+            parsed = ast.literal_eval(match.group(0))
+            if isinstance(parsed, dict):
+                return parsed
+        except (SyntaxError, ValueError):
+            return None
+
+    return None
+
+
+def _normalize_order_keys(parsed):
+    if not isinstance(parsed, dict):
+        return {"error": "Invalid order format from model", "raw_output": parsed}
+
+    medicine_name = (
+        parsed.get("medicine_name")
+        or parsed.get("medicine")
+        or parsed.get("drug_name")
+    )
+    quantity = parsed.get("quantity")
+    unit = parsed.get("unit", "strip")
+
+    if not medicine_name:
+        return {"error": "Missing medicine_name in model output", "raw_output": parsed}
+
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        return {"error": "Missing or invalid quantity in model output", "raw_output": parsed}
+
+    return {
+        "medicine_name": str(medicine_name).strip(),
+        "quantity": quantity,
+        "unit": str(unit).strip().lower() if unit else "strip",
+    }
 
 def extract_order(user_message):
 
@@ -153,25 +91,36 @@ def extract_order(user_message):
     "{user_message}"
     """
 
-    response = requests.post(
-        "http://localhost:11434/api/chat",
-        json={
-            "model": "phi",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Return ONLY JSON. No extra text."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "stream": False
-        }
-    )
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json={
+                "model": "phi",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Return ONLY JSON. No extra text."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except requests.RequestException as exc:
+        return {"error": f"LLM service unavailable: {exc}"}
 
-    result = response.json()
+    content = result.get("message", {}).get("content", "")
+    parsed = _extract_json_dict(content)
 
-    return json.loads(result["message"]["content"])
-print(extract_order("I want Cetirizine 28 strips only"))
+    if parsed is None:
+        return {"error": "No valid JSON returned by model", "raw_output": content}
+
+    return _normalize_order_keys(parsed)

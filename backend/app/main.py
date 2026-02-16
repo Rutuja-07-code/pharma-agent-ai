@@ -1,11 +1,20 @@
 #fast API entry point
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from pharmacy_agent import pharmacy_chatbot
 
 app = FastAPI(title="Agentic AI Pharmacy System")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Request format from frontend
 class ChatRequest(BaseModel):

@@ -1,9 +1,9 @@
 medicine_name,stock,prescription_required
-Paracetamol,-9001,No
+Paracetamol,12,No
 Ibuprofen,37,Yes
 Cetirizine,28,Yes
 Dextromethorphan,90,Yes
-Pantoprazole,75,Yes
+Pantoprazole,71,Yes
 Domperidone,46,No
 Loperamide,44,Yes
 Diclofenac,17,Yes

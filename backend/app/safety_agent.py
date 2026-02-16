@@ -10,9 +10,11 @@ df = pd.read_csv(DATA_FILE)
 
 # Load medicine data
 def safety_check(order):
-    med = order["medicine_name"]
+    med = order.get("medicine_name")
+    if not med:
+        return {"status": "Rejected", "reason": "Missing medicine_name"}
     try:
-        qty = int(order["quantity"])
+        qty = int(order.get("quantity"))
     except (TypeError, ValueError):
         return {"status": "Rejected", "reason": "Invalid quantity"}
 
@@ -31,6 +33,6 @@ def safety_check(order):
 
     # Prescription check
     if prescription == "Yes":
-        return {"status": "Rejected", "reason": "Prescription required"}
+        return {"status": "Pending", "reason": "Prescription required"}
 
     return {"status": "Approved", "reason": "Order allowed"}
