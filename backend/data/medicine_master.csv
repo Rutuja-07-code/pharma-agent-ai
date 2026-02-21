@@ -3,22 +3,22 @@ medicine_name,stock,prescription_required
 NORSAN Omega-3 Total,87,No
 NORSAN Omega-3 Vegan,90,No
 NORSAN Omega-3 Kapseln,75,No
-Vividrin® iso EDO® antiallergische Augentropfen,53,Yes
+Vividrin® iso EDO® antiallergische Augentropfen,0,Yes
 Aqualibra 80 mg/90 mg/180 mg Filmtabletten,16,No
 Vitasprint Pro Energie,80,No
 Cystinol akut®,65,Yes
-Cromo-ratiopharm® Augentropfen Einzeldosis,20,No
+Cromo-ratiopharm® Augentropfen Einzeldosis,0,No
 Kijimea Reizdarm PRO,30,Yes
 Mucosolvan 1 mal täglich Retardkapseln,79,Yes
 OMNi-BiOTiC SR-9 mit B-Vitaminen,86,No
 Osa Schorf Spray,58,No
-Multivitamin Fruchtgummibärchen vegan u zuckerfrei,30,Yes
+Multivitamin Fruchtgummibärchen vegan u zuckerfrei,170,Yes
 "Iberogast® Classic, Flüssigkeit zum Einnehmen",55,Yes
-COLPOFIX®,33,Yes
-Augentropfen RedCare,39,Yes
+COLPOFIX®,0,Yes
+Augentropfen RedCare,19,Yes
 MULTILAC Darmsynbiotikum,49,No
 SAW PALMETO (SÄGEPALME) 350 mg,65,Yes
-Paracetamol apodiscounter 500 mg Tabletten,90,No
+Paracetamol apodiscounter 500 mg Tabletten,58,No
 Prostata Men Kapseln,27,Yes
 Natural Intimate Creme,94,No
 proBIO 6 Probiotik Kapseln APOMIA,26,No
@@ -29,14 +29,14 @@ Vitasprint Duo Energie,17,Yes
 V-Biotics Flora Complex,80,No
 Aveeno Skin Relief Body Lotion,15,Yes
 Centrum Vital+ Mentale Leistung,17,No
-Redcare Wundschutzcreme,69,Yes
+Redcare Wundschutzcreme,0,Yes
 Cetaphil Sanft glättende SA Reinigung,95,Yes
-"Magnesium Verla® N Dragées, magensaftresistente Tabletten",49,No
-"Livocab® direkt Augentropfen, 0,05 % Augentropfen, Suspension",60,Yes
+"Magnesium Verla® N Dragées, magensaftresistente Tabletten",45,No
+"Livocab® direkt Augentropfen, 0,05 % Augentropfen, Suspension",0,Yes
 "Cetirizin HEXAL® Tropfen bei Allergien, 10 mg/ml Tropfen zum Einnehmen, Lösung",16,Yes
 "Loperamid akut - 1 A Pharma®, 2 mg Hartkapseln",56,No
 Ramipril - 1 A Pharma® 10 mg Tabletten,47,Yes
-"GRANU FINK® femina, Hartkapseln",61,Yes
+"GRANU FINK® femina, Hartkapseln",55,Yes
 Vitasprint B12 Kapseln,33,No
 Sinupret® Saft,61,No
 Nurofen 200 mg Schmelztabletten Lemon,56,Yes
