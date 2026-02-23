@@ -1,58 +1,51 @@
-// Select elements
-const sendBtn = document.querySelector("button");
+const sendBtn = document.querySelector(".send-btn");
+const micBtn = document.querySelector(".mic-btn");
 const input = document.querySelector("input");
-const chat = document.querySelector(".chat");
-const BACKEND_URL = "http://127.0.0.1:8000/chat";
+const chat = document.querySelector(".chat-box");
 
-// Send message on button click
+// Send via button or enter
 sendBtn.addEventListener("click", sendMessage);
-
-// Send message on Enter key
-input.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") {
-    sendMessage();
-  }
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
 });
 
-function appendMessage(className, text) {
+function sendMessage(textFromVoice) {
+  const message = textFromVoice || input.value.trim();
+  if (!message) return;
+
+  addMessage(message, "user");
+  input.value = "";
+
+  setTimeout(() => {
+    addMessage(
+      "Analyzing medicine, dosage, stock availability, and prescription rules…",
+      "ai"
+    );
+  }, 600);
+}
+
+function addMessage(text, type) {
   const msg = document.createElement("div");
-  msg.className = className;
+  msg.className = type;
   msg.innerText = text;
   chat.appendChild(msg);
   chat.scrollTop = chat.scrollHeight;
 }
 
-async function sendMessage() {
-  const message = input.value.trim();
-  if (message === "") return;
+/* VOICE COMMAND */
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  appendMessage("user", message);
+if (SpeechRecognition) {
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
 
-  input.value = "";
-  sendBtn.disabled = true;
+  micBtn.addEventListener("click", () => recognition.start());
 
-  appendMessage("ai", "Analyzing medicine, dosage, stock availability, and prescription rules...");
-
-  try {
-    const res = await fetch(BACKEND_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message }),
-    });
-
-    if (!res.ok) {
-      appendMessage("ai", `Backend error: ${res.status} ${res.statusText}`);
-      return;
-    }
-
-    const data = await res.json();
-    appendMessage("ai", data.reply || "No reply received from backend.");
-  } catch (err) {
-    appendMessage("ai", "Cannot connect to backend. Start backend on http://127.0.0.1:8000.");
-    console.error(err);
-  } finally {
-    sendBtn.disabled = false;
-  }
+  recognition.onresult = e => {
+    const voiceText = e.results[0][0].transcript;
+    sendMessage(voiceText);
+  };
+} else {
+  micBtn.style.display = "none";
 }
