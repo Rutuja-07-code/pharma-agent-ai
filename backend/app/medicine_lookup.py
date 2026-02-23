@@ -1,22 +1,26 @@
 import pandas as pd
 from pathlib import Path
 
-# Load dataset
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "medicine_master.csv"
-df = pd.read_csv(DATA_PATH)
-# medicine_name,stock,prescription_required
-# Rename columns for ease
-df = df.rename(columns={
-    "product name": "medicine_name",
-    "stock": "stock",
-    "prescription_required": "prescription_required"
-})
+
+
+def _load_inventory():
+    # Read fresh CSV every time so latest stock changes are reflected.
+    df = pd.read_csv(DATA_PATH)
+    return df.rename(
+        columns={
+            "product name": "medicine_name",
+            "stock": "stock",
+            "prescription_required": "prescription_required",
+        }
+    )
 
 def search_medicine(query):
+    df = _load_inventory()
     query = query.lower()
 
     # Find matches
-    matches = df[df["medicine_name"].str.lower().str.contains(query)]
+    matches = df[df["medicine_name"].str.lower().str.contains(query, na=False)]
 
     if matches.empty:
         return {

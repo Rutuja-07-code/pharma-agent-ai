@@ -3,7 +3,10 @@ from pathlib import Path
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
 
-df = pd.read_csv(DATA_FILE)
+
+def _load_inventory():
+    # Read fresh CSV every time so matching uses current inventory.
+    return pd.read_csv(DATA_FILE)
 
 
 def find_medicine_matches(user_med_name):
@@ -15,8 +18,9 @@ def find_medicine_matches(user_med_name):
     """
 
     query = user_med_name.lower().strip()
+    df = _load_inventory()
 
-    matches = df[df["medicine_name"].str.lower().str.contains(query)]
+    matches = df[df["medicine_name"].str.lower().str.contains(query, na=False)]
 
     if matches.empty:
         return None

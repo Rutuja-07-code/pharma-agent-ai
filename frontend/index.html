@@ -2,63 +2,62 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>🧬 Autonomous AI Pharmacy</title>
+  <title>Autonomous AI Pharmacy</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<header>
-  <h1>🧬 Autonomous AI Pharmacy</h1>
-  <p>From Search → Decision → Action (No Human Needed)</p>
-</header>
+  <header>
+    <h1>🧬 Autonomous AI Pharmacy</h1>
+    <p>From Search → Decision → Action (No Human Needed)</p>
+  </header>
 
-<!-- MAIN FRAME -->
-<div class="dashboard">
+  <main class="grid">
 
-  <!-- CHAT : 50% -->
-  <div class="panel chat-panel">
-    <h2>💬 AI Pharmacist</h2>
+    <!-- AI Conversation -->
+    <section class="card">
+      <h2>💬 AI Pharmacist</h2>
 
-    <div class="chat-box">
-      <div class="ai">Hello! I’m your AI Pharmacist.</div>
-      <div class="user">I need my BP medicine again.</div>
-      <div class="ai">Analyzing prescription...</div>
-    </div>
+      <div class="chat">
+        <div class="ai">Hello! I’m your AI Pharmacist. How can I help today?</div>
+      </div>
 
-    <div class="input-area">
-      <input type="text" placeholder="Speak naturally here..." />
-      <button class="mic-btn">🎤</button>
-      <button class="send-btn">Send</button>
-    </div>
-  </div>
+      <div class="input-area">
+        <input id="chat-input" type="text" placeholder="Speak naturally here…" />
+        <button id="send-btn" type="button">Send</button>
+        <button id="new-chat-btn" type="button" class="secondary">New Chat</button>
+      </div>
+    </section>
 
-  <!-- DECISION : 25% -->
-  <div class="panel decision">
-    <h2>🧠 Decision Engine</h2>
-    <ul>
-      <li>✔ Stock Available</li>
-      <li>✔ Prescription Valid</li>
-      <li>✔ Dosage Matched</li>
-      <li class="risk">⚠ Refill Frequency High</li>
-    </ul>
-    <div class="status approved">ORDER APPROVED</div>
-  </div>
+    <!-- Decision Engine -->
+    <section class="card decision">
+      <h2>🧠 Decision Engine</h2>
+      <ul>
+        <li>✔ Stock Available</li>
+        <li>✔ Prescription Valid</li>
+        <li>✔ Dosage Matched</li>
+        <li class="risk">⚠ Refill Frequency High</li>
+      </ul>
+      <div class="status approved">ORDER APPROVED</div>
+    </section>
 
-  <!-- ACTIONS : 25% -->
-  <div class="panel actions">
-    <h2>⚙ Autonomous Actions</h2>
-    <p>📦 Inventory Updated</p>
-    <p>🚚 Warehouse Notified</p>
-    <p>📲 WhatsApp Confirmation Sent</p>
-    <p class="alert">⏰ Proactive Refill Scheduled</p>
-  </div>
+    <!-- Autonomous Actions -->
+    <section class="card">
+      <h2>⚙ Autonomous Actions</h2>
+      <div class="actions">
+        <p>📦 Inventory Updated</p>
+        <p>🚚 Warehouse Notified</p>
+        <p>📲 WhatsApp Confirmation Sent</p>
+        <p class="alert">⏰ Proactive Refill Scheduled</p>
+      </div>
+    </section>
 
-</div>
+  </main>
 
-<footer>
-  Agentic AI System • Observable • Autonomous • Safe
-</footer>
-
+  <footer>
+    <p>Agentic AI System • Observable • Autonomous • Safe</p>
+  </footer>
 <script src="script.js"></script>
+
 </body>
 </html>

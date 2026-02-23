@@ -1,11 +1,11 @@
 medicine_name,stock,prescription_required
 "Panthenol Spray, 46,3 mg/g Schaum zur Anwendung auf der Haut",64,No
-NORSAN Omega-3 Total,87,No
-NORSAN Omega-3 Vegan,90,No
+NORSAN Omega-3 Total,12,No
+NORSAN Omega-3 Vegan,56,No
 NORSAN Omega-3 Kapseln,75,No
 Vividrin® iso EDO® antiallergische Augentropfen,0,Yes
 Aqualibra 80 mg/90 mg/180 mg Filmtabletten,16,No
-Vitasprint Pro Energie,80,No
+Vitasprint Pro Energie,60,No
 Cystinol akut®,65,Yes
 Cromo-ratiopharm® Augentropfen Einzeldosis,0,No
 Kijimea Reizdarm PRO,30,Yes
@@ -18,33 +18,33 @@ COLPOFIX®,0,Yes
 Augentropfen RedCare,0,Yes
 MULTILAC Darmsynbiotikum,49,No
 SAW PALMETO (SÄGEPALME) 350 mg,65,Yes
-Paracetamol apodiscounter 500 mg Tabletten,58,No
+Paracetamol apodiscounter 500 mg Tabletten,0,No
 Prostata Men Kapseln,27,Yes
 Natural Intimate Creme,94,No
 proBIO 6 Probiotik Kapseln APOMIA,26,No
 Eucerin DERMOPURE Triple Effect Reinigungsgel,85,Yes
 frida baby FlakeFixer,95,Yes
-Vitasprint Duo Energie,17,Yes
+Vitasprint Duo Energie,0,Yes
 "Bepanthen WUND- UND HEILSALBE, 50 mg/g Salbe",92,No
 V-Biotics Flora Complex,80,No
 Aveeno Skin Relief Body Lotion,15,Yes
 Centrum Vital+ Mentale Leistung,17,No
 Redcare Wundschutzcreme,0,Yes
-Cetaphil Sanft glättende SA Reinigung,95,Yes
+Cetaphil Sanft glättende SA Reinigung,0,Yes
 "Magnesium Verla® N Dragées, magensaftresistente Tabletten",45,No
 "Livocab® direkt Augentropfen, 0,05 % Augentropfen, Suspension",0,Yes
 "Cetirizin HEXAL® Tropfen bei Allergien, 10 mg/ml Tropfen zum Einnehmen, Lösung",16,Yes
 "Loperamid akut - 1 A Pharma®, 2 mg Hartkapseln",56,No
 Ramipril - 1 A Pharma® 10 mg Tabletten,47,Yes
 "GRANU FINK® femina, Hartkapseln",20,Yes
-Vitasprint B12 Kapseln,33,No
-Sinupret® Saft,61,No
+Vitasprint B12 Kapseln,0,No
+Sinupret® Saft,0,No
 Nurofen 200 mg Schmelztabletten Lemon,56,Yes
 Vitamin B-Komplex-ratiopharm,31,Yes
 Calmvalera Hevert Tropfen,64,No
 femiLoges® 4 mg magensaftresistente Tabletten,63,Yes
 Umckaloabo® Saft für Kinder,88,Yes
-"DulcoLax® Dragées, 5 mg magensaftresistente Tabletten",65,Yes
+"DulcoLax® Dragées, 5 mg magensaftresistente Tabletten",40,Yes
 Diclo-ratiopharm Schmerzgel,0,No
 "Minoxidil BIO-H-TIN-Pharma 20 mg/ml Spray zur Anwendung auf der Haut (Kopfhaut), Lösung",36,Yes
 Hyaluron-ratiopharm® Augentropfen,37,Yes
