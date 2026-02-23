@@ -489,6 +489,8 @@ pending_final_quantity = None
 
 pending_rx_confirmation = False
 pending_partial_after_rx = False
+pending_partial_order = None
+pending_partial_requires_rx = False
 
 
 def _is_order_intent(message):
@@ -537,6 +539,8 @@ def pharmacy_chatbot(user_message):
 
     global pending_rx_confirmation
     global pending_partial_after_rx
+    global pending_partial_order
+    global pending_partial_requires_rx
 
     msg = user_message.lower().strip()
     selected_order = None
@@ -568,7 +572,47 @@ def pharmacy_chatbot(user_message):
         pending_order_data = None
 
     # =========================================
-    # ✅ STEP 1: Final Confirmation After Prescription Upload
+    # ✅ STEP 1: Partial Stock Confirmation (Before Prescription)
+    # =========================================
+    if pending_partial_order is not None:
+        if msg in ["yes", "y", "confirm", "order"]:
+            order = pending_partial_order
+
+            # If prescription is needed, ask only after user confirms partial order intent.
+            if pending_partial_requires_rx:
+                pending_prescription_order = order
+                pending_final_quantity = int(order.get("quantity", 0))
+
+                pending_partial_order = None
+                pending_partial_requires_rx = False
+
+                pending_rx_confirmation = False
+                pending_partial_after_rx = True
+
+                return (
+                    "⚠️ This medicine requires a prescription.\n"
+                    "Please type: 'upload prescription' to continue."
+                )
+
+            confirmation = place_order(order)
+
+            pending_partial_order = None
+            pending_partial_requires_rx = False
+
+            return (
+                f"✅ Partial order placed successfully for {order['quantity']} units!\n\n"
+                f"{confirmation}"
+            )
+
+        if msg in ["no", "n", "cancel", "wait"]:
+            pending_partial_order = None
+            pending_partial_requires_rx = False
+            return "Okay 👍 Order cancelled."
+
+        return "Only limited stock is available. Reply 'Yes' to order available quantity or 'No' to cancel."
+
+    # =========================================
+    # ✅ STEP 2: Final Confirmation After Prescription Upload
     # =========================================
     if pending_rx_confirmation:
 
@@ -597,7 +641,7 @@ def pharmacy_chatbot(user_message):
         return "Please reply 'Yes' to confirm or 'No' to cancel."
 
     # =========================================
-    # ✅ STEP 2: Prescription Upload Handling
+    # ✅ STEP 3: Prescription Upload Handling
     # =========================================
     if pending_prescription_order is not None and not pending_rx_confirmation:
 
@@ -642,7 +686,7 @@ def pharmacy_chatbot(user_message):
         return "⚠️ Please type 'upload prescription' to continue."
 
     # =========================================
-    # ✅ STEP 3: Info Mode (no order intent)
+    # ✅ STEP 4: Info Mode (no order intent)
     # =========================================
     if selected_order is None and not _is_order_intent(user_message):
         lookup = search_medicine(user_message)
@@ -659,7 +703,7 @@ def pharmacy_chatbot(user_message):
         return "🔎 Medicine Info:\n" + "\n".join(lines)
 
     # =========================================
-    # ✅ STEP 4: Extract Order (LLM)
+    # ✅ STEP 5: Extract Order (LLM)
     # =========================================
     if selected_order is None:
         order = extract_order(user_message)
@@ -674,7 +718,7 @@ def pharmacy_chatbot(user_message):
         order = selected_order
 
     # =========================================
-    # ✅ STEP 5: Medicine Name Matching
+    # ✅ STEP 6: Medicine Name Matching
     # =========================================
     if selected_order is None:
         matches = find_medicine_matches(order["medicine_name"])
@@ -702,7 +746,7 @@ def pharmacy_chatbot(user_message):
             )
 
     # =========================================
-    # ✅ STEP 6: Safety Check (Stock + Prescription)
+    # ✅ STEP 7: Safety Check (Stock + Prescription)
     # =========================================
     decision = safety_check(order)
 
@@ -713,37 +757,28 @@ def pharmacy_chatbot(user_message):
     rx_required = str(decision["prescription_required"]).strip().lower() == "yes"
 
     # =========================================
-    # ✅ STEP 7: Partial Stock Case
+    # ✅ STEP 8: Partial Stock Case
     # =========================================
     if decision["status"] == "Partial":
 
         available = stock
 
-        # Prescription required → upload first
-        if rx_required:
-            pending_prescription_order = order
-            pending_final_quantity = available
-            pending_rx_confirmation = False
-            pending_partial_after_rx = True
+        # Ask stock confirmation first in all partial-stock cases.
+        partial_order = dict(order)
+        partial_order["quantity"] = available
 
-            return (
-                f"⚠️ Stock Update: Only {available} units available.Do you want to order\n"
-                f"⚠️ This medicine requires a prescription.\n\n"
-                "Please type: 'upload prescription' to continue."
-            )
-
-        # No prescription → place partial order directly
-        order["quantity"] = available
-        confirmation = place_order(order)
+        pending_partial_order = partial_order
+        pending_partial_requires_rx = rx_required
+        pending_partial_after_rx = False
 
         return (
-            f"⚠️ Only {available} units available.\n"
-            f"✅ Partial order placed successfully!\n\n"
-            f"{confirmation}"
+            f"⚠️ Stock Update: Only {available} units are available (you requested {decision.get('requested', order.get('quantity'))}).\n"
+            f"Would you like to order {available} units?\n"
+            "Reply 'Yes' to continue or 'No' to cancel."
         )
 
     # =========================================
-    # ✅ STEP 8: Full Stock Case
+    # ✅ STEP 9: Full Stock Case
     # =========================================
     if decision["status"] == "InStock":
 
