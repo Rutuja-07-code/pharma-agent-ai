@@ -19,7 +19,7 @@
     <main class="page">
       <div class="page-inner">
         <h1 class="page-title">Medicines</h1>
-        <p class="page-sub">Medicine names with photos</p>
+        <!-- <p class="page-sub">Medicine names with photos</p> -->
         <div id="medicines-grid" class="medicines-grid"></div>
       </div>
     </main>
@@ -33,6 +33,17 @@
         "/assets/image5.png",
         "/assets/image6.png",
         "/assets/image7.png",
+        "/assets/image9.png",
+        "/assets/image10.png",
+        "/assets/image11.png",
+        "/assets/image12.png",
+        "/assets/image13.png",
+        "/assets/image14.png",
+        "/assets/image15.png",
+        "/assets/image16.png",
+        "/assets/image17.png",
+        "/assets/image18.png",
+        "/assets/image19.png",
       ];
 
       function makeMedicineImage(name) {
@@ -64,10 +75,13 @@
           const name = item.medicine_name || "Unknown Medicine";
           const img = pickPhotoByIndex(index);
           const fallback = makeMedicineImage(name);
+          const price = Number(item.price);
+          const priceText = Number.isFinite(price) ? `EUR ${price.toFixed(2)}` : "Price unavailable";
           return `
             <article class="medicine-item">
               <img class="medicine-photo" src="${img}" alt="${name}" onerror="this.onerror=null;this.src='${fallback}'" />
               <p class="medicine-name">${name}</p>
+              <p class="medicine-price">${priceText}</p>
             </article>
           `;
         }).join("");

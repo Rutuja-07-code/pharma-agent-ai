@@ -1,69 +1,75 @@
-# import pandas as pd
-
-# from pathlib import Path
-
-# DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
-# df = pd.read_csv(DATA_FILE)
-
-# def place_order(order):
-#     med = order["medicine_name"]
-#     qty = order["quantity"]
-
-#     idx = df[df["medicine_name"].str.contains(med, case=False)].index[0]
-
-#     # Reduce stock
-#     df.loc[idx, "stock"] -= qty
-#     # Save updated inventory
-    
-#     # df.to_csv("medicine_master.csv", index=False)
-#     df.to_csv(DATA_FILE, index=False)
-
-
-#     return "✅ Order Confirmed and Inventory Updated!"
-
 import pandas as pd
 from pathlib import Path
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
+PRICE_FILE = Path(__file__).resolve().parent.parent / "data" / "products-export.xlsx"
+DEFAULT_PRICE = 9.99
+
+
+def _load_price_map():
+    if not PRICE_FILE.exists():
+        return {}
+    try:
+        prices_df = pd.read_excel(PRICE_FILE, sheet_name="Products")
+        if not {"product name", "price rec"}.issubset(prices_df.columns):
+            return {}
+
+        price_map = {}
+        for _, row in prices_df.iterrows():
+            name = str(row.get("product name", "")).strip().lower()
+            price = pd.to_numeric(row.get("price rec"), errors="coerce")
+            if name and pd.notna(price):
+                price_map[name] = float(price)
+        return price_map
+    except Exception:
+        return {}
+
+
+def _safe_unit_price(value):
+    try:
+        v = float(value)
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    return DEFAULT_PRICE
 
 
 def place_order(order):
     med = order["medicine_name"]
     qty = int(order["quantity"])
 
-    # ✅ Load fresh inventory every time
+    # Load fresh inventory for each order request.
     df = pd.read_csv(DATA_FILE)
-
-    # ✅ Find medicine safely
     match = df[df["medicine_name"].str.contains(med, case=False)]
 
     if match.empty:
-        return f"❌ Medicine '{med}' not found in inventory."
+        return f"Medicine '{med}' not found in inventory."
 
     idx = match.index[0]
     stock = int(df.loc[idx, "stock"])
 
-    # ✅ Block if stock is zero
     if stock <= 0:
-        return f"❌ Cannot place order. '{med}' is out of stock."
+        return f"Cannot place order. '{med}' is out of stock."
 
-    # ✅ Block if quantity exceeds stock
     if qty > stock:
         return (
-            f"⚠️ Only {stock} units are available.\n"
+            f"Only {stock} units are available.\n"
             f"You requested {qty}.\n"
             f"Please order {stock} or less."
         )
 
-    # ✅ Safe stock deduction
     df.loc[idx, "stock"] = stock - qty
-
-    # ✅ Save updated inventory
     df.to_csv(DATA_FILE, index=False)
 
+    price_map = _load_price_map()
+    unit_price = _safe_unit_price(price_map.get(str(med).strip().lower(), 0.0))
+    total_price = unit_price * qty
+
     return (
-        f"✅ Order Confirmed!\n"
+        "Order Confirmed!\n"
         f"Medicine: {med}\n"
         f"Quantity Ordered: {qty}\n"
-        # f"Remaining Stock: {df.loc[idx, 'stock']}"
+        f"Unit Price: EUR {unit_price:.2f}\n"
+        f"Total Price: EUR {total_price:.2f}\n"
     )

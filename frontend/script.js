@@ -5,7 +5,9 @@ const input = document.querySelector("#chat-input");
 const chat = document.querySelector(".chat");
 
 const BACKEND_URL = "http://127.0.0.1:8000/chat";
+const INVENTORY_URL = "http://127.0.0.1:8000/inventory";
 const CHAT_STORAGE_KEY = "pharma_chat_messages";
+const ORDERS_STORAGE_KEY = "pharma_orders";
 
 const WELCOME_MESSAGE =
   "Welcome to the Medico AI Pharmacist. How may I assist you with your medication or health-related queries today?";
@@ -129,6 +131,71 @@ if (window.location.pathname.endsWith('chat.html')) {
 }
 restoreChat();
 
+async function getInventoryPriceMap() {
+  try {
+    const res = await fetch(INVENTORY_URL);
+    if (!res.ok) return {};
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return {};
+
+    return rows.reduce((acc, row) => {
+      const name = String(row.medicine_name || "").trim().toLowerCase();
+      const price = Number(row.price);
+      if (name && Number.isFinite(price)) acc[name] = price;
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function extractConfirmedOrder(replyText) {
+  const text = String(replyText || "");
+  if (!/order confirmed/i.test(text)) return null;
+
+  const medicineMatch = text.match(/Medicine:\s*(.+)/i);
+  const quantityMatch = text.match(/Quantity Ordered:\s*(\d+)/i);
+  const unitPriceMatch = text.match(/Unit Price:\s*EUR\s*([0-9]+(?:\.[0-9]+)?)/i);
+  const totalPriceMatch = text.match(/Total Price:\s*EUR\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (!medicineMatch || !quantityMatch) return null;
+
+  return {
+    medicine_name: medicineMatch[1].trim(),
+    quantity: Number(quantityMatch[1]),
+    unit_price: unitPriceMatch ? Number(unitPriceMatch[1]) : NaN,
+    total_price: totalPriceMatch ? Number(totalPriceMatch[1]) : NaN,
+  };
+}
+
+async function trackPlacedOrderFromReply(replyText) {
+  const parsed = extractConfirmedOrder(replyText);
+  if (!parsed) return;
+
+  const username = localStorage.getItem("pharma_username") || "User";
+  const priceMap = await getInventoryPriceMap();
+  let unitPrice = Number(parsed.unit_price);
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    unitPrice = Number(priceMap[parsed.medicine_name.toLowerCase()] || 0);
+  }
+  let totalPrice = Number(parsed.total_price);
+  if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+    totalPrice = unitPrice * parsed.quantity;
+  }
+
+  const orders = JSON.parse(localStorage.getItem(ORDERS_STORAGE_KEY) || "[]");
+  const newOrder = {
+    username,
+    medicine_name: parsed.medicine_name,
+    quantity: parsed.quantity,
+    unit_price: unitPrice,
+    total_price: totalPrice,
+    ordered_at: new Date().toISOString(),
+  };
+
+  orders.push(newOrder);
+  localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+}
+
 async function sendMessage(textFromVoice) {
   const message = textFromVoice || input.value.trim();
   if (!message) return;
@@ -157,7 +224,9 @@ async function sendMessage(textFromVoice) {
 
     const data = await res.json();
     hideTypingIndicator();
-    appendMessage("ai", data.reply || "No reply received from backend.");
+    const replyText = data.reply || "No reply received from backend.";
+    appendMessage("ai", replyText);
+    await trackPlacedOrderFromReply(replyText);
   } catch (err) {
     hideTypingIndicator();
     appendMessage(
