@@ -23,12 +23,12 @@
             <p class="muted">Fill in the details to get started</p>
 
             <form id="signup-form" class="auth-form">
-              <label>Full name
-                <input type="text" name="fullname" placeholder="Your name" required />
+              <label>Username
+                <input type="text" name="username" placeholder="Choose a username" required />
               </label>
 
-              <label>Email
-                <input type="email" name="email" placeholder="you@example.com" required />
+              <label>Phone Number
+                <input type="tel" name="phone" placeholder="10-digit mobile number" required />
               </label>
 
               <label>Password
@@ -55,20 +55,31 @@
     <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
 
     <script>
-      // simple client-side signup: validate and store a dummy user then go to dashboard
+      // simple client-side signup: validate and store users in localStorage
       document.getElementById('signup-form').addEventListener('submit', function(e){
         e.preventDefault();
         const f = e.target;
-        const name = f.fullname.value.trim();
-        const email = f.email.value.trim();
+        const username = f.username.value.trim();
+        const phone = f.phone.value.trim();
         const pw = f.password.value;
         const pw2 = f.password2.value;
-        if(!name || !email || !pw) return alert('Please complete all fields');
+        if(!username || !phone || !pw) return alert('Please complete all fields');
+        if(!/^\d{10}$/.test(phone)) return alert('Please enter a valid 10-digit phone number');
         if(pw !== pw2) return alert('Passwords do not match');
-        // store a simple flag in localStorage and redirect to dashboard
-        localStorage.setItem('cureos_user', JSON.stringify({name, email}));
+        const users = JSON.parse(localStorage.getItem('cureos_users') || '[]');
+        if(users.some(u => u.username?.toLowerCase() === username.toLowerCase())) {
+          return alert('Username already exists. Please choose another one.');
+        }
+        if(users.some(u => u.phone === phone)) {
+          return alert('Phone number already registered.');
+        }
+
+        const newUser = { username, phone, password: pw };
+        users.push(newUser);
+        localStorage.setItem('cureos_users', JSON.stringify(users));
+        localStorage.setItem('cureos_user', JSON.stringify(newUser));
         localStorage.setItem('pharma_logged_in', 'true');
-        localStorage.setItem('pharma_username', name);
+        localStorage.setItem('pharma_username', username);
         localStorage.setItem('pharma_clear_chat', 'true');
         window.location.href = 'dashboard.html';
       });

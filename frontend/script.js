@@ -8,7 +8,7 @@ const BACKEND_URL = "http://127.0.0.1:8000/chat";
 const CHAT_STORAGE_KEY = "pharma_chat_messages";
 
 const WELCOME_MESSAGE =
-  "Welcome to the CureOS AI Pharmacist. How may I assist you with your medication or health-related queries today?";
+  "Welcome to the Medico AI Pharmacist. How may I assist you with your medication or health-related queries today?";
 
 const LEGACY_ANALYZING_MESSAGE =
   "Analyzing medicine, dosage, stock availability, and prescription rules...";

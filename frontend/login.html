@@ -3,11 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Medico — Sign in</title>
+    <title>Medico - Sign in</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-
     <main class="auth login">
       <div class="auth-container">
         <div class="auth-left">
@@ -23,12 +22,12 @@
             <p class="muted">Sign in to your account to continue</p>
 
             <form id="login-form" class="auth-form" action="javascript:void(0);" autocomplete="off">
-              <label>Email
-                <input type="email" name="email" id="login-email" placeholder="you@example.com" required>
+              <label>Username
+                <input type="text" name="username" id="login-username" placeholder="Enter username" required>
               </label>
 
               <label>Password
-                <input type="password" name="password" id="login-password" placeholder="••••••••" required>
+                <input type="password" name="password" id="login-password" placeholder="********" required>
               </label>
 
               <button type="submit" class="btn-primary">Sign In</button>
@@ -40,30 +39,36 @@
         </div>
         <div class="auth-right">
           <h3>Your Health, Simplified</h3>
-          <p>AI‑powered pharmacy management at your fingertips</p>
+          <p>AI-powered pharmacy management at your fingertips</p>
         </div>
       </div>
     </main>
 
-      <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
+    <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
     <script>
       // Simple client-side login: check localStorage and redirect
       document.getElementById('login-form').addEventListener('submit', function(e){
         e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
+        const username = document.getElementById('login-username').value.trim();
         const pw = document.getElementById('login-password').value;
-        const user = JSON.parse(localStorage.getItem('cureos_user') || '{}');
-        if(!user.email || !user.name) return alert('No account found. Please sign up first.');
-        if(user.email !== email) return alert('Email not found.');
-        // Password check is dummy (not secure)
+
+        const users = JSON.parse(localStorage.getItem('cureos_users') || '[]');
+        if(!Array.isArray(users) || users.length === 0) {
+          return alert('No account found. Please sign up first.');
+        }
+
+        const matchedUser = users.find((user) =>
+          String(user.username || '').toLowerCase() === username.toLowerCase()
+        );
+
+        if(!matchedUser) return alert('Invalid username.');
+        if(String(matchedUser.password || '') !== pw) return alert('Incorrect password.');
+
+        localStorage.setItem('cureos_user', JSON.stringify(matchedUser));
         localStorage.setItem('pharma_logged_in', 'true');
-        localStorage.setItem('pharma_username', user.name);
+        localStorage.setItem('pharma_username', matchedUser.username);
         localStorage.setItem('pharma_clear_chat', 'true');
         window.location.href = 'dashboard.html';
-      });
-    </script>
-    </body>
-  </html>
       });
     </script>
   </body>

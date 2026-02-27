@@ -198,8 +198,8 @@
             <div class="value" id="total-medicines">156</div>
           </div>
           <div class="stat-card">
-            <h4>Total Stock Value</h4>
-            <div class="value" id="total-value">₹45.2K</div>
+            <h4>Registered Users</h4>
+            <div class="value" id="total-value">0</div>
           </div>
           <div class="stat-card">
             <h4>Low Stock Items</h4>
@@ -276,6 +276,24 @@
           </div>
         </section>
 
+        <section class="admin-section">
+          <h2 class="section-title">Registered Users (Username + Number)</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Username</th>
+                  <th>Phone Number</th>
+                </tr>
+              </thead>
+              <tbody id="users-body">
+                <!-- Will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
     </main>
 
@@ -316,6 +334,40 @@
         { rank: 4, name: 'Vitamin D3', units: 720, revenue: 1800, trend: '↑ 15%' },
         { rank: 5, name: 'Amoxicillin 250mg', units: 560, revenue: 6720, trend: '↑ 5%' },
       ];
+
+      function getRegisteredUsers() {
+        const users = JSON.parse(localStorage.getItem('cureos_users') || '[]');
+        if (Array.isArray(users) && users.length > 0) return users;
+
+        // Backward compatibility with older single-user storage.
+        const legacy = JSON.parse(localStorage.getItem('cureos_user') || '{}');
+        if (legacy && (legacy.username || legacy.name || legacy.phone)) {
+          return [legacy];
+        }
+        return [];
+      }
+
+      function populateRegisteredUsers() {
+        const tbody = document.getElementById('users-body');
+        const users = getRegisteredUsers();
+
+        if (users.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="3">No users registered yet.</td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = users.map((user, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${user.username || user.name || '-'}</td>
+            <td>${user.phone || '-'}</td>
+          </tr>
+        `).join('');
+      }
 
       // Populate inventory table
       function populateInventory() {
@@ -374,8 +426,9 @@
         const totalMedicines = inventoryData.length;
         const lowStock = inventoryData.filter(item => item.stock < 10 && item.stock > 0).length;
         const outOfStock = inventoryData.filter(item => item.stock === 0).length;
+        const totalUsers = getRegisteredUsers().length;
         document.getElementById('total-medicines').textContent = totalMedicines;
-        document.getElementById('total-value').textContent = '-';
+        document.getElementById('total-value').textContent = totalUsers;
         document.getElementById('low-stock').textContent = lowStock;
         document.getElementById('out-of-stock').textContent = outOfStock;
       }
@@ -393,6 +446,7 @@
         populateInventory();
         populateSales();
         populateTopProducts();
+        populateRegisteredUsers();
         updateStatistics();
       }
 
