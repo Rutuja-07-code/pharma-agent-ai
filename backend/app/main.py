@@ -16,6 +16,7 @@ from inventory_api import router as inventory_router
 
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
 logger = logging.getLogger("pharma.langfuse")
 
 app.add_middleware(
@@ -112,4 +113,6 @@ def chat(req: ChatRequest):
 
 
 # Serve frontend files from the same FastAPI app so only one server is needed.
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

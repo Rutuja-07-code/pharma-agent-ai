@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Medico - Browse Medicines</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <a href="dashboard.html" class="back">←</a>
+          <h2 class="chat-title">Browse Medicines</h2>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="page-inner">
+        <h1 class="page-title">Medicines</h1>
+        <p class="page-sub">Medicine names with photos</p>
+        <div id="medicines-grid" class="medicines-grid"></div>
+      </div>
+    </main>
+
+    <script>
+      const MEDICINE_PHOTO_POOL = [
+        "/assets/image1.png",
+        "/assets/image2.png",
+        "/assets/image3.png",
+        "/assets/image4.png",
+        "/assets/image5.png",
+        "/assets/image6.png",
+        "/assets/image7.png",
+      ];
+
+      function makeMedicineImage(name) {
+        const label = String(name || "Medicine").slice(0, 18);
+        const svg =
+          `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='220' viewBox='0 0 320 220'>` +
+          `<defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0%' stop-color='#e8fff7'/><stop offset='100%' stop-color='#e7f1ff'/></linearGradient></defs>` +
+          `<rect width='320' height='220' fill='url(#g)'/>` +
+          `<rect x='98' y='68' width='124' height='84' rx='42' fill='#16a085'/>` +
+          `<rect x='160' y='68' width='62' height='84' rx='42' fill='#ffffff'/>` +
+          `<text x='160' y='188' text-anchor='middle' fill='#334155' font-size='18' font-family='Arial, sans-serif'>${label}</text>` +
+          `</svg>`;
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      }
+
+      function pickPhotoByIndex(index) {
+        if (!MEDICINE_PHOTO_POOL.length) return "";
+        return MEDICINE_PHOTO_POOL[index % MEDICINE_PHOTO_POOL.length];
+      }
+
+      function renderMedicines(items) {
+        const grid = document.getElementById("medicines-grid");
+        if (!Array.isArray(items) || items.length === 0) {
+          grid.innerHTML = "<p class='muted'>No medicines found.</p>";
+          return;
+        }
+
+        grid.innerHTML = items.map((item, index) => {
+          const name = item.medicine_name || "Unknown Medicine";
+          const img = pickPhotoByIndex(index);
+          const fallback = makeMedicineImage(name);
+          return `
+            <article class="medicine-item">
+              <img class="medicine-photo" src="${img}" alt="${name}" onerror="this.onerror=null;this.src='${fallback}'" />
+              <p class="medicine-name">${name}</p>
+            </article>
+          `;
+        }).join("");
+      }
+
+      async function loadMedicines() {
+        try {
+          const res = await fetch("http://127.0.0.1:8000/inventory");
+          if (!res.ok) throw new Error("Inventory fetch failed");
+          const data = await res.json();
+          renderMedicines(data);
+        } catch (err) {
+          document.getElementById("medicines-grid").innerHTML =
+            "<p class='muted'>Unable to load medicines right now.</p>";
+        }
+      }
+
+      loadMedicines();
+    </script>
+  </body>
+</html>
