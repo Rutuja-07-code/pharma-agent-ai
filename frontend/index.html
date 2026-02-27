@@ -1,63 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Autonomous AI Pharmacy</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>CureOS — Home</title>
+      <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="topbar-left">
+            <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <rect rx="6" width="24" height="24" fill="#16a085" />
+              <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class="brand">CureOS</span>
+          </div>
+          <div class="topbar-right">
+            <a class="link" href="login.html">Login</a>
+            <a class="btn-primary" href="dashboard.html">Get Started</a>
+          </div>
+        </div>
+      </header>
 
-  <header>
-    <h1>🧬 Autonomous AI Pharmacy</h1>
-    <p>From Search → Decision → Action (No Human Needed)</p>
-  </header>
+      <main class="hero">
+        <div class="hero-inner">
+          <div class="hero-left">
+            <span class="badge">AI‑Powered Pharmacy</span>
+            <h1>Your Intelligent <span class="accent">Healthcare</span> Partner</h1>
+            <p class="lead">Experience the future of pharmacy with CureOS. Get expert guidance, automatic refill reminders, and seamless medication management—all powered by advanced AI.</p>
+            <div class="hero-cta">
+              <a class="btn-primary" href="dashboard.html">Start Your Journey</a>
+              <a class="btn-ghost" href="#">Learn More</a>
+            </div>
+          </div>
+          <div class="hero-right">
+            <div class="hero-card">
+              <div class="hero-card-img"> <!-- placeholder image -->
+                <svg width="260" height="220" viewBox="0 0 260 220" xmlns="http://www.w3.org/2000/svg"><rect rx="8" width="260" height="220" fill="#eef7f3"/></svg>
+              </div>
+              <div class="hero-caption">AI Pharmacist Available 24/7</div>
+            </div>
+          </div>
+        </div>
+      </main>
 
-  <main class="grid">
+      <section class="features">
+        <div class="page-inner">
+          <h2 class="section-title">Intelligent Features</h2>
+          <p class="section-sub">Everything you need for smarter healthcare management</p>
 
-    <!-- AI Conversation -->
-    <section class="card">
-      <h2>💬 AI Pharmacist</h2>
+          <div class="features-row">
+            <div class="feature">
+              <div class="feature-icon bg-green">💬</div>
+              <h4>AI Pharmacist</h4>
+              <p class="muted">Get instant expert guidance through natural conversation, voice or text.</p>
+            </div>
 
-      <div class="chat">
-        <div class="ai">Hello! I’m your AI Pharmacist. How can I help today?</div>
-      </div>
+            <div class="feature">
+              <div class="feature-icon bg-blue">⏰</div>
+              <h4>Smart Refills</h4>
+              <p class="muted">Autonomous prediction of medication needs before you run out.</p>
+            </div>
 
-      <div class="input-area">
-        <input id="chat-input" type="text" placeholder="Speak naturally here…" />
-        <button id="send-btn" type="button">Send</button>
-        <button id="new-chat-btn" type="button" class="secondary">New Chat</button>
-      </div>
-    </section>
+            <div class="feature">
+              <div class="feature-icon bg-pink">🔒</div>
+              <h4>Safety First</h4>
+              <p class="muted">Real‑time drug interaction and contraindication checks.</p>
+            </div>
 
-    <!-- Decision Engine -->
-    <section class="card decision">
-      <h2>🧠 Decision Engine</h2>
-      <ul>
-        <li>✔ Stock Available</li>
-        <li>✔ Prescription Valid</li>
-        <li>✔ Dosage Matched</li>
-        <li class="risk">⚠ Refill Frequency High</li>
-      </ul>
-      <div class="status approved">ORDER APPROVED</div>
-    </section>
+            <div class="feature">
+              <div class="feature-icon bg-purple">⚙️</div>
+              <h4>Automated Tasks</h4>
+              <p class="muted">Autonomous inventory management and procurement systems.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <!-- Autonomous Actions -->
-    <section class="card">
-      <h2>⚙ Autonomous Actions</h2>
-      <div class="actions">
-        <p>📦 Inventory Updated</p>
-        <p>🚚 Warehouse Notified</p>
-        <p>📲 WhatsApp Confirmation Sent</p>
-        <p class="alert">⏰ Proactive Refill Scheduled</p>
-      </div>
-    </section>
+      <section class="cta-banner">
+        <div class="page-inner">
+          <h3>Ready to Experience the Future of Pharmacy?</h3>
+          <p class="muted">Join thousands of users managing their health smarter with CureOS</p>
+          <a class="btn-primary" href="dashboard.html">Get Started Free</a>
+        </div>
+      </section>
 
-  </main>
+      <footer class="site-footer">
+        <div class="page-inner">© CureOS — Agentic AI System • Observable • Autonomous • Safe</div>
+      </footer>
 
-  <footer>
-    <p>Agentic AI System • Observable • Autonomous • Safe</p>
-  </footer>
-<script src="script.js"></script>
-
-</body>
-</html>
+      <script src="script.js"></script>
+    </body>
+  </html>
