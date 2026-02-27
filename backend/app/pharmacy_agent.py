@@ -650,13 +650,13 @@ def pharmacy_chatbot(user_message):
         return "Please reply 'Yes' to confirm or 'No' to cancel."
 
     # =========================================
-    # ✅ STEP 3: Prescription Upload Handling
+    # ✅ STEP 3: Prescription Confirmation Handling
     # =========================================
     if pending_prescription_order is not None and not pending_rx_confirmation:
 
-        if "upload" in msg or "done" in msg:
+        if msg in ["yes", "y", "upload", "done", "upload prescription"]:
             requested_qty = int(pending_prescription_order.get("quantity", pending_final_quantity or 0))
-            final_qty = int(pending_final_quantity or 0)
+            final_qty = int(pending_final_quantity or requested_qty)
 
             # Re-check safety now to avoid stale stock/prescription state.
             current_order = dict(pending_prescription_order)
@@ -670,18 +670,19 @@ def pharmacy_chatbot(user_message):
                 pending_partial_after_rx = False
                 return f"❌ Order Rejected: {latest_decision['reason']}"
 
+            order = pending_prescription_order
             if latest_decision["status"] == "Partial":
-                final_qty = int(latest_decision["stock"])
-                pending_final_quantity = final_qty
-                pending_rx_confirmation = True
+                order["quantity"] = int(latest_decision["stock"])
+                confirmation = place_order(order)
+                pending_prescription_order = None
+                pending_final_quantity = None
+                pending_rx_confirmation = False
+                pending_partial_after_rx = False
                 return (
-                    "✅ Prescription received successfully.\n\n"
-                    f"⚠️ Only {final_qty} units are available (you requested {requested_qty}).\n"
-                    "Would you like to confirm the partial order?\n"
-                    "Reply 'Yes' to confirm or 'No' to cancel."
+                    f"⚠️ Only {order['quantity']} units are available (you requested {requested_qty}).\n"
+                    f"✅ Partial order confirmed.\n\n{confirmation}"
                 )
 
-            order = pending_prescription_order
             order["quantity"] = final_qty
             confirmation = place_order(order)
 
@@ -690,7 +691,14 @@ def pharmacy_chatbot(user_message):
             pending_rx_confirmation = False
             pending_partial_after_rx = False
 
-            return f"✅ Prescription received.\n\n{confirmation}"
+            return f"✅ Order Confirmed!\n\n{confirmation}"
+
+        if msg in ["no", "n", "cancel"]:
+            pending_prescription_order = None
+            pending_final_quantity = None
+            pending_rx_confirmation = False
+            pending_partial_after_rx = False
+            return "Okay, order cancelled because prescription is required."
 
         return "Do you have a prescription? (yes/no)"
 

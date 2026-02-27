@@ -12,6 +12,7 @@ const WELCOME_MESSAGE =
 
 const LEGACY_ANALYZING_MESSAGE =
   "Analyzing medicine, dosage, stock availability, and prescription rules...";
+let typingIndicatorEl = null;
 
 // Attach events only if elements exist
 if (sendBtn) sendBtn.addEventListener("click", sendMessage);
@@ -42,6 +43,27 @@ function appendMessage(className, text) {
   persistChat();
 }
 
+function showTypingIndicator() {
+  if (!chat || typingIndicatorEl) return;
+  const msg = document.createElement("div");
+  msg.className = "bubble ai typing-indicator";
+  msg.innerHTML = `
+    <span class="ai-logo" title="AI">🤖</span>
+    <span class="typing-dots" aria-label="AI is typing">
+      <span></span><span></span><span></span>
+    </span>
+  `;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+  typingIndicatorEl = msg;
+}
+
+function hideTypingIndicator() {
+  if (!typingIndicatorEl) return;
+  typingIndicatorEl.remove();
+  typingIndicatorEl = null;
+}
+
 function sanitizeAiText(text) {
   const value = String(text || "").trim();
   if (!value) return "";
@@ -55,7 +77,9 @@ function sanitizeAiText(text) {
 
 function persistChat() {
   // Save only class (ai/user) and text (strip logo for ai)
-  const messages = Array.from(chat.querySelectorAll('.bubble')).map((el) => {
+  const messages = Array.from(chat.querySelectorAll('.bubble'))
+    .filter((el) => !el.classList.contains("typing-indicator"))
+    .map((el) => {
     let className = el.classList.contains('ai') ? 'ai' : 'user';
     let text = className === 'ai'
       ? el.querySelector('.ai-text')?.innerText || ''
@@ -113,6 +137,7 @@ async function sendMessage(textFromVoice) {
 
   if (input) input.value = "";
   if (sendBtn) sendBtn.disabled = true;
+  showTypingIndicator();
 
   try {
     const res = await fetch(BACKEND_URL, {
@@ -122,6 +147,7 @@ async function sendMessage(textFromVoice) {
     });
 
     if (!res.ok) {
+      hideTypingIndicator();
       appendMessage(
         "ai",
         `Backend error: ${res.status} ${res.statusText}`
@@ -130,14 +156,17 @@ async function sendMessage(textFromVoice) {
     }
 
     const data = await res.json();
+    hideTypingIndicator();
     appendMessage("ai", data.reply || "No reply received from backend.");
   } catch (err) {
+    hideTypingIndicator();
     appendMessage(
       "ai",
       "Cannot connect to backend. Start backend on http://127.0.0.1:8000."
     );
     console.error(err);
   } finally {
+    hideTypingIndicator();
     if (sendBtn) sendBtn.disabled = false;
   }
 }

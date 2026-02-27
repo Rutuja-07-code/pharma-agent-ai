@@ -173,6 +173,42 @@ body{font-family:Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica
   vertical-align: middle;
   white-space: pre-line;
 }
+
+.typing-indicator .typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.typing-indicator .typing-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  opacity: 0.35;
+  animation: dotPulse 1.2s infinite ease-in-out;
+}
+
+.typing-indicator .typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator .typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 .chat-input-wrap{display:flex;gap:8px;margin-top:20px}
 .chat-input-wrap input{flex:1;padding:12px;border-radius:8px;border:1px solid var(--border)}
 .chat-input-wrap button{padding:10px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff}
