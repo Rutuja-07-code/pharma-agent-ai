@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CureOS — Create account</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <rect rx="6" width="24" height="24" fill="#16a085" />
+            <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand">CureOS</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="auth">
+      <div class="auth-inner">
+        <h2>Create your account</h2>
+        <p class="muted">Fill in the details to get started</p>
+
+        <form id="signup-form" class="auth-form">
+          <label>Full name
+            <input type="text" name="fullname" placeholder="Your name" required />
+          </label>
+
+          <label>Email
+            <input type="email" name="email" placeholder="you@example.com" required />
+          </label>
+
+          <label>Password
+            <input type="password" name="password" placeholder="Create a password" required />
+          </label>
+
+          <label>Confirm Password
+            <input type="password" name="password2" placeholder="Confirm password" required />
+          </label>
+
+          <button class="btn-primary" type="submit">Create account</button>
+        </form>
+
+        <p class="muted">Already have an account? <a href="login.html">Sign in</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer"><div class="page-inner">© CureOS</div></footer>
+
+    <script>
+      // simple client-side signup: validate and store a dummy user then go to dashboard
+      document.getElementById('signup-form').addEventListener('submit', function(e){
+        e.preventDefault();
+        const f = e.target;
+        const name = f.fullname.value.trim();
+        const email = f.email.value.trim();
+        const pw = f.password.value;
+        const pw2 = f.password2.value;
+        if(!name || !email || !pw) return alert('Please complete all fields');
+        if(pw !== pw2) return alert('Passwords do not match');
+        // store a simple flag in localStorage and redirect to dashboard
+        localStorage.setItem('cureos_user', JSON.stringify({name, email}));
+        window.location.href = 'dashboard.html';
+      });
+    </script>
+  </body>
+</html>

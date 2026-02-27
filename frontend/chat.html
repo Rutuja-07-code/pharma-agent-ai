@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CureOS — AI Pharmacist</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <a href="dashboard.html" class="back">←</a>
+          <h2 class="chat-title">AI Pharmacist</h2>
+        </div>
+      </div>
+    </header>
+
+    <main class="chat-page">
+      <div class="chat-container">
+        <div class="chat" id="chat">
+          <div class="bubble ai">Hello! I'm your CureOS AI Pharmacist. How can I assist you with your health and medication needs today?</div>
+        </div>
+        <div class="chat-input-wrap">
+          <input id="chat-input" type="text" placeholder="Speak naturally here..." />
+          <button id="mic-btn" type="button">🎤</button>
+          <button id="send-btn" type="button">Send</button>
+        </div>
+      </div>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

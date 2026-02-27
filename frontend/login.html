@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CureOS — Sign in</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <rect rx="6" width="24" height="24" fill="#16a085" />
+            <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand">CureOS</span>
+        </div>
+        <div class="topbar-right"></div>
+      </div>
+    </header>
+
+    <main class="auth">
+      <div class="auth-inner">
+        <h2>Welcome back</h2>
+        <p class="muted">Sign in to your account to continue</p>
+
+        <form class="auth-form" action="#" method="POST">
+          <label>Email
+            <input type="email" name="email" placeholder="you@example.com" required>
+          </label>
+
+          <label>Password
+            <input type="password" name="password" placeholder="••••••••" required>
+          </label>
+
+          <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+
+        <p class="muted">Don't have an account? <a href="signup.html">Sign up</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer"><div class="page-inner">© CureOS</div></footer>
+  </body>
+</html>

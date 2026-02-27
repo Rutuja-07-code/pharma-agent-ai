@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CureOS — Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <rect rx="6" width="24" height="24" fill="#16a085" />
+            <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand">CureOS</span>
+        </div>
+        <div class="topbar-right">
+          <div class="welcome">Welcome, Ayush Shende</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="page-inner">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">Manage your medications and health</p>
+
+        <section class="cards-row">
+          <a class="card small card-link" href="chat.html">
+            <div class="card-icon bg-green">💬</div>
+            <div class="card-body">
+              <h3>AI Pharmacist</h3>
+              <p class="muted">Chat with your AI health assistant</p>
+            </div>
+          </a>
+
+          <article class="card small">
+            <div class="card-icon bg-blue">🔍</div>
+            <div class="card-body">
+              <h3>Browse Medicines</h3>
+              <p class="muted">Search and order medications</p>
+            </div>
+          </article>
+
+          <article class="card small">
+            <div class="card-icon bg-purple">🧾</div>
+            <div class="card-body">
+              <h3>My Orders</h3>
+              <p class="muted">Track your order history</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="card large">
+          <div class="card-header">
+            <div class="card-icon bg-pink">⏰</div>
+            <div>
+              <h3>Smart Refill Reminders</h3>
+              <p class="muted">AI‑predicted medication refills</p>
+            </div>
+          </div>
+          <div class="card-content">
+            <div class="empty-illustration">🔒</div>
+            <p class="muted">No refill reminders at the moment</p>
+            <p class="muted">Start ordering medicines to get intelligent refill predictions</p>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="page-inner">© CureOS</div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
