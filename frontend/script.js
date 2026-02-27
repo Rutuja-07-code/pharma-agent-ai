@@ -1,15 +1,25 @@
-// Select elements
+// Select elements (may not exist on every page)
 const sendBtn = document.querySelector("#send-btn");
 const newChatBtn = document.querySelector("#new-chat-btn");
 const input = document.querySelector("#chat-input");
-const chat = document.querySelector(".chat");
+let chat = document.querySelector(".chat");
 const BACKEND_URL = "http://127.0.0.1:8000/chat";
 const CHAT_STORAGE_KEY = "pharma_chat_messages";
 const WELCOME_MESSAGE = "Hello! I’m your AI Pharmacist. How can I help today?";
 
-// Send message on button click
-sendBtn.addEventListener("click", sendMessage);
-newChatBtn.addEventListener("click", startNewChat);
+// attach events only if elements are present
+if (sendBtn) sendBtn.addEventListener("click", sendMessage);
+if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
+
+// Send message on Enter key
+if (input) {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+}
 
 // Send message on Enter key
 input.addEventListener("keydown", (e) => {
@@ -20,6 +30,9 @@ input.addEventListener("keydown", (e) => {
 });
 
 function appendMessage(className, text) {
+  // ensure we have a chat element (re-query in case it changed)
+  if (!chat) chat = document.querySelector(".chat");
+  if (!chat) return;
   const msg = document.createElement("div");
   msg.className = className;
   msg.innerText = text;
@@ -66,8 +79,11 @@ function startNewChat() {
 
 restoreChat();
 
-async function sendMessage() {
-  const message = input.value.trim();
+// if page lacks chat but has input, still set focus on input
+if (!chat && input) input.focus();
+
+async function sendMessage(textFromVoice) {
+  const message = textFromVoice || input.value.trim();
   if (message === "") return;
 
   appendMessage("user", message);
@@ -99,4 +115,26 @@ async function sendMessage() {
   } finally {
     sendBtn.disabled = false;
   }
+}
+
+/* VOICE COMMAND */
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+
+  const micBtn = document.querySelector("#mic-btn");
+  if (micBtn) {
+    micBtn.addEventListener("click", () => recognition.start());
+  }
+
+  recognition.onresult = (e) => {
+    const voiceText = e.results[0][0].transcript;
+    sendMessage(voiceText);
+  };
+} else {
+  const micBtn = document.querySelector("#mic-btn");
+  if (micBtn) micBtn.style.display = "none";
 }
