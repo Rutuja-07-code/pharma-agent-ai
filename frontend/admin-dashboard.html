@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Medico — Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      
+      .admin-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      
+      .stat-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        text-align: center;
+        box-shadow: var(--shadow);
+      }
+      
+      .stat-card h4 {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .stat-card .value {
+        font-size: 28px;
+        font-weight: bold;
+        color: var(--accent);
+      }
+      
+      .logout-btn {
+        background: #dc3545;
+        color: white;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      
+      .logout-btn:hover {
+        background: #c82333;
+      }
+      
+      .admin-section {
+        margin-bottom: 28px;
+      }
+      
+      .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: #0b1220;
+      }
+      
+      .table-container {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+      }
+      
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      
+      th {
+        background: #f3f4f6;
+        padding: 14px;
+        text-align: left;
+        font-weight: 600;
+        color: #0b1220;
+        border-bottom: 1px solid var(--border);
+      }
+      
+      td {
+        padding: 14px;
+        border-bottom: 1px solid var(--border);
+        color: #0f172a;
+      }
+      
+      tr:last-child td {
+        border-bottom: none;
+      }
+      
+      tr:hover {
+        background: #f9f9f9;
+      }
+      
+      .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      
+      .status-in-stock {
+        background: #ecfdf5;
+        color: #065f46;
+      }
+      
+      .status-low {
+        background: #fef3c7;
+        color: #a16207;
+      }
+      
+      .status-out {
+        background: #fee2e2;
+        color: #7f1d1d;
+      }
+      
+      .chart-container {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+      
+      .chart-placeholder {
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      
+      @media (max-width: 1200px) {
+        .admin-stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      
+      @media (max-width: 768px) {
+        .admin-stats {
+          grid-template-columns: 1fr;
+        }
+        
+        table {
+          font-size: 0.9rem;
+        }
+        
+        th, td {
+          padding: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <rect rx="6" width="24" height="24" fill="#16a085" />
+            <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand">Medico Admin</span>
+        </div>
+        <div class="topbar-right">
+          <div class="welcome">Welcome, Admin</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="page-inner">
+        <div class="admin-header">
+          <div>
+            <h1 class="page-title">Admin Dashboard</h1>
+            <p class="page-sub">Manage inventory, stocks, and view analytics</p>
+          </div>
+          <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <!-- Statistics Cards -->
+        <section class="admin-stats">
+          <div class="stat-card">
+            <h4>Total Medicines</h4>
+            <div class="value" id="total-medicines">156</div>
+          </div>
+          <div class="stat-card">
+            <h4>Total Stock Value</h4>
+            <div class="value" id="total-value">₹45.2K</div>
+          </div>
+          <div class="stat-card">
+            <h4>Low Stock Items</h4>
+            <div class="value" id="low-stock">12</div>
+          </div>
+          <div class="stat-card">
+            <h4>Out of Stock</h4>
+            <div class="value" id="out-of-stock">3</div>
+          </div>
+        </section>
+
+        <!-- Inventory Section -->
+        <section class="admin-section">
+          <h2 class="section-title">📦 Medicine Inventory</h2>
+          <div class="table-container">
+            <table id="inventory-table">
+              <thead>
+                <tr>
+                  <th>Medicine Name</th>
+                  <th>SKU</th>
+                  <th>Category</th>
+                  <th>Current Stock</th>
+                  <th>Unit Price</th>
+                  <th>Total Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-body">
+                <!-- Will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Sales Overview -->
+        <section class="admin-section">
+          <h2 class="section-title">📊 Sales Overview</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Orders</th>
+                  <th>Total Revenue</th>
+                  <th>Avg Order Value</th>
+                  <th>Items Sold</th>
+                </tr>
+              </thead>
+              <tbody id="sales-body">
+                <!-- Will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Top Products -->
+        <section class="admin-section">
+          <h2 class="section-title">⭐ Top Selling Products</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Product Name</th>
+                  <th>Units Sold</th>
+                  <th>Revenue</th>
+                  <th>Trend</th>
+                </tr>
+              </thead>
+              <tbody id="top-products-body">
+                <!-- Will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="page-inner">© CureOS - Admin Panel</div>
+    </footer>
+
+    <script>
+      // Check if user is logged in
+      function checkAdminAccess() {
+        if (!localStorage.getItem('adminLoggedIn')) {
+          window.location.href = 'admin-login.html';
+        }
+      }
+
+      // Logout function
+      function logout() {
+        localStorage.removeItem('adminLoggedIn');
+        localStorage.removeItem('adminEmail');
+        window.location.href = 'admin-login.html';
+      }
+
+      // Sample data for medicines/stocks
+      const inventoryData = [
+        { name: 'Aspirin 500mg', sku: 'ASP-001', category: 'Painkillers', stock: 450, price: 5, status: 'in-stock' },
+        { name: 'Paracetamol 650mg', sku: 'PAR-002', category: 'Fever', stock: 320, price: 4.50, status: 'in-stock' },
+        { name: 'Ibuprofen 400mg', sku: 'IBU-003', category: 'Painkillers', stock: 15, price: 6, status: 'low' },
+        { name: 'Amoxicillin 250mg', sku: 'AMO-004', category: 'Antibiotics', stock: 200, price: 12, status: 'in-stock' },
+        { name: 'Metformin 500mg', sku: 'MET-005', category: 'Diabetes', stock: 0, price: 8, status: 'out' },
+        { name: 'Vitamin D3 1000IU', sku: 'VIT-006', category: 'Vitamins', stock: 680, price: 2.50, status: 'in-stock' },
+        { name: 'Cough Syrup 100ml', sku: 'COU-007', category: 'Cold & Cough', stock: 5, price: 3.75, status: 'low' },
+        { name: 'Multivitamin', sku: 'MUL-008', category: 'Vitamins', stock: 420, price: 7, status: 'in-stock' },
+        { name: 'Iron Supplement', sku: 'IRO-009', category: 'Supplements', stock: 0, price: 5.50, status: 'out' },
+        { name: 'Calcium Tablet', sku: 'CAL-010', category: 'Supplements', stock: 210, price: 3, status: 'in-stock' },
+      ];
+
+      const salesData = [
+        { date: 'Feb 23, 2026', orders: 42, revenue: 8500, avgOrder: 202, items: 156 },
+        { date: 'Feb 24, 2026', orders: 38, revenue: 7800, avgOrder: 205, items: 142 },
+        { date: 'Feb 25, 2026', orders: 51, revenue: 10200, avgOrder: 200, items: 189 },
+        { date: 'Feb 26, 2026', orders: 47, revenue: 9450, avgOrder: 201, items: 173 },
+        { date: 'Feb 27, 2026', orders: 54, revenue: 11200, avgOrder: 207, items: 198 },
+      ];
+
+      const topProducts = [
+        { rank: 1, name: 'Paracetamol 650mg', units: 1240, revenue: 5580, trend: '↑ 12%' },
+        { rank: 2, name: 'Aspirin 500mg', units: 980, revenue: 4900, trend: '↑ 8%' },
+        { rank: 3, name: 'Multivitamin', units: 850, revenue: 5950, trend: '↓ 3%' },
+        { rank: 4, name: 'Vitamin D3', units: 720, revenue: 1800, trend: '↑ 15%' },
+        { rank: 5, name: 'Amoxicillin 250mg', units: 560, revenue: 6720, trend: '↑ 5%' },
+      ];
+
+      // Populate inventory table
+      function populateInventory() {
+        const tbody = document.getElementById('inventory-body');
+        tbody.innerHTML = inventoryData.map(item => {
+          const totalValue = item.stock * item.price;
+          const statusClass = `status-${item.status}`;
+          const statusText = item.status === 'in-stock' ? 'In Stock' : item.status === 'low' ? 'Low Stock' : 'Out of Stock';
+          
+          return `
+            <tr>
+              <td>${item.name}</td>
+              <td>${item.sku}</td>
+              <td>${item.category}</td>
+              <td>${item.stock}</td>
+              <td>₹${item.price}</td>
+              <td>₹${totalValue.toFixed(2)}</td>
+              <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Populate sales table
+      function populateSales() {
+        const tbody = document.getElementById('sales-body');
+        tbody.innerHTML = salesData.map(sale => `
+          <tr>
+            <td>${sale.date}</td>
+            <td>${sale.orders}</td>
+            <td>₹${sale.revenue}</td>
+            <td>₹${sale.avgOrder}</td>
+            <td>${sale.items}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Populate top products
+      function populateTopProducts() {
+        const tbody = document.getElementById('top-products-body');
+        tbody.innerHTML = topProducts.map(product => `
+          <tr>
+            <td>${product.rank}</td>
+            <td>${product.name}</td>
+            <td>${product.units}</td>
+            <td>₹${product.revenue}</td>
+            <td style="color: ${product.trend.includes('↑') ? '#059669' : '#dc2626'}; font-weight: 600;">${product.trend}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Calculate and update statistics
+      function updateStatistics() {
+        const totalMedicines = inventoryData.length;
+        const totalValue = inventoryData.reduce((sum, item) => sum + (item.stock * item.price), 0);
+        const lowStock = inventoryData.filter(item => item.status === 'low').length;
+        const outOfStock = inventoryData.filter(item => item.status === 'out').length;
+
+        document.getElementById('total-medicines').textContent = totalMedicines;
+        document.getElementById('total-value').textContent = '₹' + (totalValue / 1000).toFixed(1) + 'K';
+        document.getElementById('low-stock').textContent = lowStock;
+        document.getElementById('out-of-stock').textContent = outOfStock;
+      }
+
+      // Initialize dashboard
+      function initDashboard() {
+        checkAdminAccess();
+        populateInventory();
+        populateSales();
+        populateTopProducts();
+        updateStatistics();
+      }
+
+      // Run on page load
+      document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+  </body>
+</html>

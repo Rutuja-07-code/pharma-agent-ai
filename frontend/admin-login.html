@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Medico — Admin Sign in</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+
+    <main class="auth login">
+      <div class="auth-container">
+        <div class="auth-left">
+          <div class="auth-logo">
+            <svg class="logo" width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <rect rx="6" width="24" height="24" fill="#16a085" />
+              <path d="M7 12h10M12 7v10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class="brand">Medico</span>
+          </div>
+          <div class="auth-inner">
+            <h2>Admin Access</h2>
+            <p class="muted">Sign in to access the admin dashboard</p>
+
+            <form class="auth-form" id="admin-login-form">
+              <label>Email
+                <input type="email" name="email" placeholder="admin@cureos.com" required>
+              </label>
+
+              <label>Password
+                <input type="password" name="password" placeholder="••••••••" required>
+              </label>
+
+              <button type="submit" class="btn-primary">Admin Sign In</button>
+            </form>
+
+            <p class="muted">Not an admin? <a href="login.html">User Login</a></p>
+            <p class="muted"><a href="index.html">Back to Home</a></p>
+          </div>
+        </div>
+        <div class="auth-right">
+          <h3>Admin Dashboard</h3>
+          <p>Manage stocks, view analytics, and control your pharmacy inventory</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer"><div class="page-inner">© CureOS</div></footer>
+
+    <script>
+      document.getElementById('admin-login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const email = this.querySelector('input[name="email"]').value;
+        const password = this.querySelector('input[name="password"]').value;
+        
+        // Simple validation (replace with real backend authentication)
+        if (email === 'admin@cureos.com' && password === 'admin123') {
+          localStorage.setItem('adminLoggedIn', 'true');
+          localStorage.setItem('adminEmail', email);
+          window.location.href = 'admin-dashboard.html';
+        } else {
+          alert('Invalid credentials. Please try again.');
+        }
+      });
+    </script>
+  </body>
+</html>
