@@ -22,13 +22,13 @@
             <h2>Welcome back</h2>
             <p class="muted">Sign in to your account to continue</p>
 
-            <form class="auth-form" action="#" method="POST">
+            <form id="login-form" class="auth-form" action="javascript:void(0);" autocomplete="off">
               <label>Email
-                <input type="email" name="email" placeholder="you@example.com" required>
+                <input type="email" name="email" id="login-email" placeholder="you@example.com" required>
               </label>
 
               <label>Password
-                <input type="password" name="password" placeholder="••••••••" required>
+                <input type="password" name="password" id="login-password" placeholder="••••••••" required>
               </label>
 
               <button type="submit" class="btn-primary">Sign In</button>
@@ -45,6 +45,26 @@
       </div>
     </main>
 
-    <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
+      <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
+    <script>
+      // Simple client-side login: check localStorage and redirect
+      document.getElementById('login-form').addEventListener('submit', function(e){
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const pw = document.getElementById('login-password').value;
+        const user = JSON.parse(localStorage.getItem('cureos_user') || '{}');
+        if(!user.email || !user.name) return alert('No account found. Please sign up first.');
+        if(user.email !== email) return alert('Email not found.');
+        // Password check is dummy (not secure)
+        localStorage.setItem('pharma_logged_in', 'true');
+        localStorage.setItem('pharma_username', user.name);
+        localStorage.setItem('pharma_clear_chat', 'true');
+        window.location.href = 'dashboard.html';
+      });
+    </script>
+    </body>
+  </html>
+      });
+    </script>
   </body>
 </html>

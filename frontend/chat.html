@@ -16,13 +16,19 @@
       </div>
     </header>
 
-    <main class="chat-page">
-      <div class="chat-container">
+    <main class="chat-page" style="display: flex; gap: 24px;">
+      <aside class="chat-history-bar" style="width: 220px; background: #fff; border: 1px solid #e6eef6; border-radius: 10px; box-shadow: 0 6px 18px rgba(15,23,42,0.06); padding: 18px 12px; display: flex; flex-direction: column;">
+        <h3 style="font-size: 1.1rem; margin-bottom: 12px; color: #0f172a;">Chat History</h3>
+        <ul id="chat-history-list" style="list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto;"></ul>
+        <div style="margin-top: 18px; color: #6b7280; font-size: 0.92rem;">Old chats are saved locally.</div>
+      </aside>
+      <div class="chat-container" style="flex: 1;">
         <div class="chat" id="chat" role="log" aria-live="polite"></div>
         <div class="chat-input-wrap">
           <input id="chat-input" type="text" placeholder="Enter your question or request here..." aria-label="Chat input" />
           <button id="mic-btn" type="button" aria-label="Record voice">🎤</button>
           <button id="send-btn" type="button">Send</button>
+          <button id="new-chat-btn" type="button">New Chat</button>
         </div>
       </div>
     </main>

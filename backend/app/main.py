@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+
 from pharmacy_agent import pharmacy_chatbot
+from inventory_api import router as inventory_router
 
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -18,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount inventory API
+app.include_router(inventory_router)
 
 # Request format from frontend
 class ChatRequest(BaseModel):

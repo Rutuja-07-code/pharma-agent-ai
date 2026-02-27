@@ -67,6 +67,9 @@
         if(pw !== pw2) return alert('Passwords do not match');
         // store a simple flag in localStorage and redirect to dashboard
         localStorage.setItem('cureos_user', JSON.stringify({name, email}));
+        localStorage.setItem('pharma_logged_in', 'true');
+        localStorage.setItem('pharma_username', name);
+        localStorage.setItem('pharma_clear_chat', 'true');
         window.location.href = 'dashboard.html';
       });
     </script>

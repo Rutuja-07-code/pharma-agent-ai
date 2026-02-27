@@ -363,20 +363,29 @@ def pharmacy_chatbot(user_message):
     # ✅ STEP B: Prescription Upload Handling
     # =========================================
     if pending_prescription_order is not None and not pending_stock_confirmation:
-
-        if "upload" in msg or "done" in msg:
-
+        if msg.lower() in ["yes", "y"]:
             # Prescription accepted → Now ask confirmation for stock
             pending_stock_confirmation = True
-
             return (
                 f"✅ Prescription received.\n\n"
                 f"⚠️ Only {pending_final_quantity} units are available.\n"
                 f"Would you like to order {pending_final_quantity} units now?\n"
                 f"Reply 'Yes' or 'No'."
             )
-
-        return "⚠️ Please type 'upload prescription' to continue."
+        elif msg.lower() in ["no", "n"]:
+            pending_prescription_order = None
+            pending_final_quantity = None
+            return "❌ Order cannot be placed without a prescription."
+        elif "upload prescription" in msg:
+            # Simulate prescription upload and proceed to confirmation
+            pending_stock_confirmation = True
+            return (
+                f"✅ Prescription received.\n\n"
+                f"⚠️ Only {pending_final_quantity} units are available.\n"
+                f"Would you like to order {pending_final_quantity} units now?\n"
+                f"Reply 'Yes' or 'No'."
+            )
+        return "Do you have a prescription? (yes/no)"
 
     # =========================================
     # ✅ STEP 1: Extract Order
@@ -440,7 +449,7 @@ def pharmacy_chatbot(user_message):
             return (
                 f"⚠️ Stock Update: Only {available} units available.\n"
                 f"⚠️ Prescription is required.\n\n"
-                "Please type: 'upload prescription' to continue."
+                "Do you have a prescription? (yes/no)"
             )
 
         # No prescription → place partial order directly
@@ -464,7 +473,7 @@ def pharmacy_chatbot(user_message):
 
             return (
                 "⚠️ Prescription Required.\n"
-                "Please type: 'upload prescription' to continue."
+                "Do you have a prescription? (yes/no)"
             )
 
         confirmation = place_order(order)
@@ -591,7 +600,7 @@ def pharmacy_chatbot(user_message):
 
                 return (
                     "⚠️ This medicine requires a prescription.\n"
-                    "Please type: 'upload prescription' to continue."
+                    "Do you have a prescription? (yes/no)"
                 )
 
             confirmation = place_order(order)
@@ -683,7 +692,7 @@ def pharmacy_chatbot(user_message):
 
             return f"✅ Prescription received.\n\n{confirmation}"
 
-        return "⚠️ Please type 'upload prescription' to continue."
+        return "Do you have a prescription? (yes/no)"
 
     # =========================================
     # ✅ STEP 4: Info Mode (no order intent)
@@ -709,7 +718,18 @@ def pharmacy_chatbot(user_message):
             order = extract_order(user_message)
 
             if "error" in order:
-                return f"❌ Could not understand your request.\nRaw Output: {order['raw_output']}"
+                # Handle LLM service errors and extraction failures gracefully
+                err = order.get("error")
+                raw = order.get("raw_output")
+                if err and "LLM service unavailable" in err:
+                    return (
+                        "❌ Sorry, our order extraction service is temporarily unavailable. "
+                        "Please try again later or contact support if the problem persists."
+                    )
+                if raw:
+                    return f"❌ Could not understand your request.\nError: {err}\nRaw Output: {raw}"
+                else:
+                    return f"❌ Could not understand your request.\nError: {err}"
 
             required_fields = {"medicine_name", "quantity", "unit"}
             if not required_fields.issubset(order.keys()):
@@ -791,7 +811,7 @@ def pharmacy_chatbot(user_message):
 
             return (
                 "⚠️ Prescription Required.\n"
-                "Please type: 'upload prescription' to continue."
+                "Do you have a prescription? (yes/no)"
             )
 
         # Normal medicine → place order

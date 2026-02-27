@@ -298,19 +298,8 @@
         window.location.href = 'admin-login.html';
       }
 
-      // Sample data for medicines/stocks
-      const inventoryData = [
-        { name: 'Aspirin 500mg', sku: 'ASP-001', category: 'Painkillers', stock: 450, price: 5, status: 'in-stock' },
-        { name: 'Paracetamol 650mg', sku: 'PAR-002', category: 'Fever', stock: 320, price: 4.50, status: 'in-stock' },
-        { name: 'Ibuprofen 400mg', sku: 'IBU-003', category: 'Painkillers', stock: 15, price: 6, status: 'low' },
-        { name: 'Amoxicillin 250mg', sku: 'AMO-004', category: 'Antibiotics', stock: 200, price: 12, status: 'in-stock' },
-        { name: 'Metformin 500mg', sku: 'MET-005', category: 'Diabetes', stock: 0, price: 8, status: 'out' },
-        { name: 'Vitamin D3 1000IU', sku: 'VIT-006', category: 'Vitamins', stock: 680, price: 2.50, status: 'in-stock' },
-        { name: 'Cough Syrup 100ml', sku: 'COU-007', category: 'Cold & Cough', stock: 5, price: 3.75, status: 'low' },
-        { name: 'Multivitamin', sku: 'MUL-008', category: 'Vitamins', stock: 420, price: 7, status: 'in-stock' },
-        { name: 'Iron Supplement', sku: 'IRO-009', category: 'Supplements', stock: 0, price: 5.50, status: 'out' },
-        { name: 'Calcium Tablet', sku: 'CAL-010', category: 'Supplements', stock: 210, price: 3, status: 'in-stock' },
-      ];
+      // Fetch real inventory data from backend
+      let inventoryData = [];
 
       const salesData = [
         { date: 'Feb 23, 2026', orders: 42, revenue: 8500, avgOrder: 202, items: 156 },
@@ -332,18 +321,20 @@
       function populateInventory() {
         const tbody = document.getElementById('inventory-body');
         tbody.innerHTML = inventoryData.map(item => {
-          const totalValue = item.stock * item.price;
-          const statusClass = `status-${item.status}`;
-          const statusText = item.status === 'in-stock' ? 'In Stock' : item.status === 'low' ? 'Low Stock' : 'Out of Stock';
-          
+          // Status logic: in-stock, low, out
+          let status = 'in-stock';
+          if (item.stock === 0) status = 'out';
+          else if (item.stock < 10) status = 'low';
+          const statusClass = `status-${status}`;
+          const statusText = status === 'in-stock' ? 'In Stock' : status === 'low' ? 'Low Stock' : 'Out of Stock';
           return `
             <tr>
-              <td>${item.name}</td>
-              <td>${item.sku}</td>
-              <td>${item.category}</td>
+              <td>${item.medicine_name}</td>
+              <td>-</td>
+              <td>-</td>
               <td>${item.stock}</td>
-              <td>₹${item.price}</td>
-              <td>₹${totalValue.toFixed(2)}</td>
+              <td>-</td>
+              <td>-</td>
               <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             </tr>
           `;
@@ -381,19 +372,24 @@
       // Calculate and update statistics
       function updateStatistics() {
         const totalMedicines = inventoryData.length;
-        const totalValue = inventoryData.reduce((sum, item) => sum + (item.stock * item.price), 0);
-        const lowStock = inventoryData.filter(item => item.status === 'low').length;
-        const outOfStock = inventoryData.filter(item => item.status === 'out').length;
-
+        const lowStock = inventoryData.filter(item => item.stock < 10 && item.stock > 0).length;
+        const outOfStock = inventoryData.filter(item => item.stock === 0).length;
         document.getElementById('total-medicines').textContent = totalMedicines;
-        document.getElementById('total-value').textContent = '₹' + (totalValue / 1000).toFixed(1) + 'K';
+        document.getElementById('total-value').textContent = '-';
         document.getElementById('low-stock').textContent = lowStock;
         document.getElementById('out-of-stock').textContent = outOfStock;
       }
 
       // Initialize dashboard
-      function initDashboard() {
+      async function initDashboard() {
         checkAdminAccess();
+        // Fetch inventory from backend
+        try {
+          const res = await fetch('http://127.0.0.1:8000/inventory');
+          inventoryData = await res.json();
+        } catch (e) {
+          inventoryData = [];
+        }
         populateInventory();
         populateSales();
         populateTopProducts();

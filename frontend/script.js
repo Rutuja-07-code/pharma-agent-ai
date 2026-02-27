@@ -30,22 +30,30 @@ input.addEventListener("keydown", (e) => {
 });
 
 function appendMessage(className, text) {
-  // ensure we have a chat element (re-query in case it changed)
   if (!chat) chat = document.querySelector(".chat");
   if (!chat) return;
   const msg = document.createElement("div");
-  msg.className = className;
-  msg.innerText = text;
+  msg.className = `bubble ${className}`;
+  if (className === "ai") {
+    // Add AI logo (robot emoji or SVG)
+    msg.innerHTML = `<span class="ai-logo" title="AI">🤖</span><span class="ai-text">${text.replace(/\n/g, '<br>')}</span>`;
+  } else {
+    msg.innerHTML = `<span class="user-text">${text.replace(/\n/g, '<br>')}</span>`;
+  }
   chat.appendChild(msg);
   chat.scrollTop = chat.scrollHeight;
   persistChat();
 }
 
 function persistChat() {
-  const messages = Array.from(chat.querySelectorAll(".ai, .user")).map((el) => ({
-    className: el.className,
-    text: el.innerText,
-  }));
+  // Save only class (ai/user) and text (strip logo for ai)
+  const messages = Array.from(chat.querySelectorAll('.bubble')).map((el) => {
+    let className = el.classList.contains('ai') ? 'ai' : 'user';
+    let text = className === 'ai'
+      ? el.querySelector('.ai-text')?.innerText || ''
+      : el.querySelector('.user-text')?.innerText || '';
+    return { className, text };
+  });
   localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
 }
 
@@ -60,10 +68,7 @@ function restoreChat() {
     chat.innerHTML = "";
     saved.forEach((item) => {
       if (!item || (item.className !== "ai" && item.className !== "user")) return;
-      const msg = document.createElement("div");
-      msg.className = item.className;
-      msg.innerText = item.text || "";
-      chat.appendChild(msg);
+      appendMessage(item.className, item.text || "");
     });
     chat.scrollTop = chat.scrollHeight;
   } catch {
@@ -77,6 +82,14 @@ function startNewChat() {
   input.value = "";
 }
 
+// Clear chat history on login if needed
+if (window.location.pathname.endsWith('chat.html')) {
+  const loggedIn = localStorage.getItem('pharma_logged_in');
+  if (loggedIn === 'true' && localStorage.getItem('pharma_clear_chat') === 'true') {
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+    localStorage.setItem('pharma_clear_chat', 'false');
+  }
+}
 restoreChat();
 
 // if page lacks chat but has input, still set focus on input
