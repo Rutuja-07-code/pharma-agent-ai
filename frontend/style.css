@@ -122,9 +122,11 @@ body{font-family:Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica
 
 /* Chat page */
 .chat-page{padding:20px}
-.chat-container{max-width:900px;margin:0 auto}
-.bubble{background:var(--card);padding:16px;border-radius:12px;border:1px solid var(--border);display:inline-block}
-.bubble.ai{margin-bottom:8px}
+.chat-container{max-width:900px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 120px)}
+.chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:12px}
+.bubble{background:var(--card);padding:16px;border-radius:12px;border:1px solid var(--border);max-width:70%;word-wrap:break-word}
+.bubble.ai{align-self:flex-start;background:#ffffff;margin-bottom:8px}
+.bubble.user{align-self:flex-end;background:#e6f7ff;margin-bottom:8px;text-align:right}
 .chat-input-wrap{display:flex;gap:8px;margin-top:20px}
 .chat-input-wrap input{flex:1;padding:12px;border-radius:8px;border:1px solid var(--border)}
 .chat-input-wrap button{padding:10px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff}

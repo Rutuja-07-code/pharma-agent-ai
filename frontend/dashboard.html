@@ -17,7 +17,7 @@
           <span class="brand">Medico</span>
         </div>
         <div class="topbar-right">
-          <div class="welcome">Welcome, Ayush Shende</div>
+          <div class="welcome">Welcome, <span id="dashboard-username">User</span></div>
         </div>
       </div>
     </header>
@@ -76,5 +76,10 @@
     </footer>
 
     <script src="script.js"></script>
+    <script>
+      // Replace with actual username from localStorage or backend
+      const username = localStorage.getItem('pharma_username') || 'User';
+      document.getElementById('dashboard-username').textContent = username;
+    </script>
   </body>
 </html>

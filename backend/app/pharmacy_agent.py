@@ -706,14 +706,14 @@ def pharmacy_chatbot(user_message):
     # ✅ STEP 5: Extract Order (LLM)
     # =========================================
     if selected_order is None:
-        order = extract_order(user_message)
+            order = extract_order(user_message)
 
-        if "error" in order:
-            return f"❌ Could not understand your request.\nRaw Output: {order['raw_output']}"
+            if "error" in order:
+                return f"❌ Could not understand your request.\nRaw Output: {order['raw_output']}"
 
-        required_fields = {"medicine_name", "quantity", "unit"}
-        if not required_fields.issubset(order.keys()):
-            return f"❌ Missing fields: {required_fields - set(order.keys())}"
+            required_fields = {"medicine_name", "quantity", "unit"}
+            if not required_fields.issubset(order.keys()):
+                return f"❌ Missing fields: {required_fields - set(order.keys())}"
     else:
         order = selected_order
 

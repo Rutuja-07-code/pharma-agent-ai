@@ -5,7 +5,7 @@ const input = document.querySelector("#chat-input");
 let chat = document.querySelector(".chat");
 const BACKEND_URL = "http://127.0.0.1:8000/chat";
 const CHAT_STORAGE_KEY = "pharma_chat_messages";
-const WELCOME_MESSAGE = "Hello! I’m your AI Pharmacist. How can I help today?";
+const WELCOME_MESSAGE = "Welcome to the CureOS AI Pharmacist. How may I assist you with your medication or health‑related queries today?";
 
 // attach events only if elements are present
 if (sendBtn) sendBtn.addEventListener("click", sendMessage);
@@ -91,7 +91,7 @@ async function sendMessage(textFromVoice) {
   input.value = "";
   sendBtn.disabled = true;
 
-  appendMessage("ai", "Analyzing medicine, dosage, stock availability, and prescription rules...");
+  appendMessage("ai", "Please wait while I process your request…");
 
   try {
     const res = await fetch(BACKEND_URL, {

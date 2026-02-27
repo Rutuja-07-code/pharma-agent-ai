@@ -18,12 +18,10 @@
 
     <main class="chat-page">
       <div class="chat-container">
-        <div class="chat" id="chat">
-          <div class="bubble ai">Hello! I'm your CureOS AI Pharmacist. How can I assist you with your health and medication needs today?</div>
-        </div>
+        <div class="chat" id="chat" role="log" aria-live="polite"></div>
         <div class="chat-input-wrap">
-          <input id="chat-input" type="text" placeholder="Speak naturally here..." />
-          <button id="mic-btn" type="button">🎤</button>
+          <input id="chat-input" type="text" placeholder="Enter your question or request here..." aria-label="Chat input" />
+          <button id="mic-btn" type="button" aria-label="Record voice">🎤</button>
           <button id="send-btn" type="button">Send</button>
         </div>
       </div>
