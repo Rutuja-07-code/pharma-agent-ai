@@ -15,6 +15,11 @@ Then open:
 
 The frontend is served by FastAPI, so you do not need a separate frontend server.
 
+## Langfuse (one-time setup)
+
+Create a local `.env` from `.env.example` and add your Langfuse keys.
+The backend auto-loads `.env` on startup, so no manual `export` is needed each time.
+
 ## Run without typing commands each time
 
 ### macOS

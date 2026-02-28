@@ -3,10 +3,17 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/tmp/pharma_agent_ai.log"
-APP_PORT="${APP_PORT:-8003}"
+APP_PORT="${APP_PORT:-8000}"
 APP_URL="http://127.0.0.1:${APP_PORT}"
 
-# Optional tracing config (set real values in your shell/profile).
+# Load optional local .env values once (keys only, comments ignored).
+if [ -f "$REPO_DIR/.env" ]; then
+  set -a
+  source "$REPO_DIR/.env"
+  set +a
+fi
+
+# Optional tracing config.
 export LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-}"
 export LANGFUSE_PUBLIC_KEY="${LANGFUSE_PUBLIC_KEY:-}"
 export LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}"

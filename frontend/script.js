@@ -18,15 +18,16 @@ function getBackendCandidates() {
   const candidates = [];
 
   if (explicit) candidates.push(explicit);
-  if (!explicit) candidates.push("http://127.0.0.1:8003");
+  if (!explicit) candidates.push("http://127.0.0.1:8000");
 
   if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
     const sameOrigin = normalizeBaseUrl(window.location.origin);
     if (sameOrigin) candidates.push(sameOrigin);
   }
 
-  ["8003", "8000", "8001", "8002"].forEach((port) => {
+  ["8000", "8001", "8002", "8003"].forEach((port) => {
     candidates.push(`http://127.0.0.1:${port}`);
+    candidates.push(`http://localhost:${port}`);
   });
 
   return [...new Set(candidates)];
@@ -628,7 +629,7 @@ async function sendMessage(textFromVoice) {
     hideTypingIndicator();
     appendMessage(
       "ai",
-      `Cannot connect to backend. Set localStorage PHARMA_API_BASE (example: http://127.0.0.1:8003). Tried: ${BACKEND_BASE_CANDIDATES.join(", ")}`
+      `Cannot connect to backend. Set localStorage PHARMA_API_BASE (example: http://127.0.0.1:8000). Tried: ${BACKEND_BASE_CANDIDATES.join(", ")}`
     );
     console.error(err);
   } finally {

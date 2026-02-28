@@ -1,304 +1,4 @@
 # # #End-to-end AI agent pipeline
-
-# # from order_extractor import extract_order
-# # from safety_agent import safety_check
-# # from order_executor import place_order
-
-# # #✅ Temporary memory for pending order
-# # pending_order = None
-
-
-# # def pharmacy_chatbot(user_message):
-# #     global pending_order
-
-# #     print("\n🧑 User:", user_message)
-# #     user_message_lower = user_message.lower().strip()
-
-# #     # ✅ Step A: Handle user confirmation for partial stock
-# #     if pending_order is not None:
-
-# #         # If user agrees
-# #         if "yes" in user_message_lower or "order" in user_message_lower:
-
-# #             # Place partial order
-# #             confirmation = place_order(pending_order)
-
-# #             # Clear pending order
-# #             pending_order = None
-
-# #             return (
-# #                 f"✅ Partial order placed successfully!\n\n"
-# #                 f"{confirmation}"
-# #             )
-# #         # If user says no
-# #         if "no" in user_message_lower or "wait" in user_message_lower:
-
-# #             pending_order = None
-# #             return "Okay 👍 Order cancelled. Let me know if you need anything else."
-
-# #         return "Please reply with 'Yes' to confirm partial order or 'No' to cancel."
-
-
-
-# #     # Step 1: Extract order using LLM
-# #     order = extract_order(user_message)
-# #     print("🤖 Extracted Order:", order)
-# #     if "error" in order:
-# #         return f"❌ Could not understand order: {order['error']}"
-# #     required = {"medicine_name", "quantity", "unit"}
-# #     if not required.issubset(order.keys()):
-# #         return f"❌ Could not understand order: missing fields {sorted(required - set(order.keys()))}"
-
-# #     # Step 2: Safety Check
-# #     decision = safety_check(order)
-# #     print("🛡️ Safety Decision:", decision)
-
-# #     if decision["status"] == "Rejected":
-# #         return f"❌ Order Rejected: {decision['reason']}"
-    
-# #     if decision["status"] == "Pending":
-# #         return f"Order Pending: {decision['reason']}"
-    
-# #     if decision["status"] == "Checking":
-
-# #         available = decision["available_quantity"]
-
-# #         # Save pending order with available qty
-# #         pending_order = order
-# #         pending_order["quantity"] = available
-
-# #         return (
-# #             f"⚠️ Stock Update:\n"
-# #             f"{decision['reason']}\n\n"
-# #             f"Would you like to order {available} units now?\n"
-# #             f"Reply 'Yes' to confirm or 'No' to cancel."
-# #         )
-
-
-# #     # Step 3: Place Order
-# #     confirmation = place_order(order)
-# #     return confirmation
-
-
-# # # Run chatbot
-# # if __name__ == "__main__":
-# #     msg = input("Enter medicine request: ")
-# #     reply = pharmacy_chatbot(msg)
-# #     print("\n🤖 Bot:", reply)
-
-
-# # from order_extractor import extract_order
-# # from safety_agent import safety_check
-# # from order_executor import place_order
-
-# # # ✅ Temporary memory
-# # pending_order = None
-# # pending_prescription_order = None
-
-
-# # def pharmacy_chatbot(user_message):
-# #     global pending_order
-# #     global pending_prescription_order
-
-# #     print("\n🧑 User:", user_message)
-# #     user_message_lower = user_message.lower().strip()
-
-# #     # ==========================================
-# #     # ✅ STEP A: Handle Prescription Upload
-# #     # ==========================================
-# #     if pending_prescription_order is not None:
-
-# #         if "upload" in user_message_lower or "done" in user_message_lower or "yes" in user_message_lower:
-
-# #             # Place order after prescription upload
-# #             confirmation = place_order(pending_prescription_order)
-
-# #             pending_prescription_order = None
-
-# #             return (
-# #                 "✅ Prescription received successfully!\n"
-# #                 f"{confirmation}"
-# #             )
-
-# #         return "⚠️ Please type 'upload prescription' to continue."
-
-# #     # ==========================================
-# #     # ✅ STEP B: Handle Partial Stock Confirmation
-# #     # ==========================================
-# #     if pending_order is not None:
-
-# #         if "yes" in user_message_lower or "order" in user_message_lower:
-
-# #             confirmation = place_order(pending_order)
-# #             pending_order = None
-
-# #             return (
-# #                 f"✅ Partial order placed successfully!\n\n"
-# #                 f"{confirmation}"
-# #             )
-
-# #         if "no" in user_message_lower or "wait" in user_message_lower:
-# #             pending_order = None
-# #             return "Okay 👍 Order cancelled."
-
-# #         return "Please reply with 'Yes' or 'No'."
-
-# #     # ==========================================
-# #     # ✅ STEP 1: Extract Order
-# #     # ==========================================
-# #     order = extract_order(user_message)
-# #     print("🤖 Extracted Order:", order)
-
-# #     if "error" in order:
-# #         return f"❌ Could not understand order: {order['error']}"
-
-# #     required = {"medicine_name", "quantity", "unit"}
-# #     if not required.issubset(order.keys()):
-# #         return f"❌ Missing fields: {sorted(required - set(order.keys()))}"
-
-# #     # ==========================================
-# #     # ✅ STEP 2: Safety Check
-# #     # ==========================================
-# #     decision = safety_check(order)
-# #     print("🛡️ Safety Decision:", decision)
-
-# #     # Case 1: Rejected
-# #     if decision["status"] == "Rejected":
-# #         return f"❌ Order Rejected: {decision['reason']}"
-
-# #     # Case 2: Prescription Required
-# #     if decision["status"] == "Pending":
-
-# #         pending_prescription_order = order
-
-# #         return (
-# #             f"⚠️ Prescription Required: {decision['reason']}\n\n"
-# #             "Please type: 'upload prescription' to continue."
-# #         )
-
-# #     # Case 3: Partial Stock
-# #     if decision["status"] == "Checking":
-
-# #         available = decision["available_quantity"]
-
-# #         pending_order = order
-# #         pending_order["quantity"] = available
-
-# #         return (
-# #             f"⚠️ Stock Update:\n"
-# #             f"{decision['reason']}\n\n"
-# #             f"Would you like to order {available} units now?\n"
-# #             f"Reply 'Yes' to confirm or 'No' to cancel."
-# #         )
-
-# #     # Case 4: Approved → Place Order
-# #     confirmation = place_order(order)
-# #     return f"✅ Order Confirmed!\n{confirmation}"
-
-# from order_extractor import extract_order
-# from safety_agent import safety_check
-# from order_executor import place_order
-
-# pending_prescription_order = None
-# pending_final_quantity = None
-
-
-# def pharmacy_chatbot(user_message):
-#     global pending_prescription_order
-#     global pending_final_quantity
-
-#     msg = user_message.lower().strip()
-
-#     # =========================================
-#     # ✅ STEP A: Prescription Upload Handling
-#     # =========================================
-#     if pending_prescription_order is not None:
-
-#         if "upload" in msg or "done" in msg or "yes" in msg:
-
-#             # Prescription accepted → Place order
-#             order = pending_prescription_order
-#             order["quantity"] = pending_final_quantity
-
-#             pending_prescription_order = None
-#             pending_final_quantity = None
-
-#             confirmation = place_order(order)
-
-#             return (
-#                 "✅ Prescription received successfully.\n"
-#                 f"✅ Order placed for {order['quantity']} units.\n\n"
-#                 f"{confirmation}"
-#             )
-
-#         return "⚠️ Please type 'upload prescription' to continue."
-
-#     # =========================================
-#     # ✅ STEP 1: Extract Order
-#     # =========================================
-#     order = extract_order(user_message)
-
-#     if "error" in order:
-#         return f"❌ Could not understand: {order['raw_output']}"
-
-#     # =========================================
-#     # ✅ STEP 2: Safety Check (Stock First)
-#     # =========================================
-#     decision = safety_check(order)
-
-#     if decision["status"] == "Rejected":
-#         return f"❌ {decision['reason']}"
-
-#     stock = decision["stock"]
-#     rx_required = decision["prescription_required"]
-
-#     # =========================================
-#     # ✅ STEP 3: Partial Stock Case
-#     # =========================================
-#     if decision["status"] == "Partial":
-
-#         available = stock
-
-#         # If prescription required → ask upload
-#         if rx_required == "Yes":
-#             pending_prescription_order = order
-#             pending_final_quantity = available
-
-#             return (
-#                 f"⚠️ Stock Update: Only {available} units available.\n"
-#                 f"⚠️ This medicine requires a prescription.\n\n"
-#                 "Please type: 'upload prescription' to order available quantity."
-#             )
-
-#         # No prescription → place partial order directly
-#         order["quantity"] = available
-#         confirmation = place_order(order)
-
-#         return (
-#             f"⚠️ Only {available} units available.\n"
-#             f"✅ Partial order placed successfully!\n\n"
-#             f"{confirmation}"
-#         )
-
-#     # =========================================
-#     # ✅ STEP 4: Full Stock Case
-#     # =========================================
-#     if decision["status"] == "InStock":
-
-#         # If prescription required → ask upload
-#         if rx_required == "Yes":
-#             pending_prescription_order = order
-#             pending_final_quantity = order["quantity"]
-
-#             return (
-#                 "⚠️ Prescription Required.\n"
-#                 "Please type: 'upload prescription' to continue."
-#             )
-
-#         # No prescription → place order directly
-#         confirmation = place_order(order)
-#         return f"✅ Order Confirmed!\n\n{confirmation}"
-
 """
 from order_extractor import extract_order
 from safety_agent import safety_check
@@ -493,7 +193,7 @@ except ModuleNotFoundError:
     from medicine_matcher import find_medicine_matches
     from medicine_lookup import search_medicine
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 
 # ================================
 # Pending States (Memory)
@@ -584,10 +284,94 @@ def _extract_medicine_query(message):
     return msg or (message or "").strip()
 
 
+AgentTracer = Optional[Callable[[str, Dict[str, Any], Dict[str, Any], str], None]]
+
+
+def _trace_agent(
+    trace: AgentTracer,
+    agent_name: str,
+    input_payload: Optional[Dict[str, Any]] = None,
+    output_payload: Optional[Dict[str, Any]] = None,
+    status: str = "ok",
+):
+    if not callable(trace):
+        return
+    try:
+        trace(
+            agent_name,
+            dict(input_payload or {}),
+            dict(output_payload or {}),
+            status,
+        )
+    except Exception:
+        # Tracing should never break the order flow.
+        return
+
+
+def _execute_order_with_agent_traces(
+    order: Dict[str, Any],
+    trace: AgentTracer = None,
+    stock_before: Optional[int] = None,
+):
+    qty = int(order.get("quantity", 0) or 0)
+    med_name = str(order.get("medicine_name", "")).strip()
+
+    if stock_before is not None:
+        _trace_agent(
+            trace,
+            "Inventory Agent",
+            input_payload={
+                "medicine_name": med_name,
+                "requested_quantity": qty,
+            },
+            output_payload={
+                "stock_available": int(stock_before),
+                "reserved_quantity": qty,
+            },
+        )
+
+    confirmation = place_order(order)
+    is_success = "Order Confirmed!" in str(confirmation)
+    _trace_agent(
+        trace,
+        "Execution Agent",
+        input_payload={
+            "medicine_name": med_name,
+            "quantity": qty,
+        },
+        output_payload={
+            "success": is_success,
+            "confirmation": str(confirmation),
+        },
+        status="ok" if is_success else "error",
+    )
+
+    if stock_before is not None:
+        remaining = max(0, int(stock_before) - qty)
+        procurement_threshold = 10
+        action = (
+            "No action"
+            if remaining > procurement_threshold
+            else "Create refill task"
+        )
+        _trace_agent(
+            trace,
+            "Procurement Agent",
+            input_payload={
+                "medicine_name": med_name,
+                "remaining_stock": remaining,
+                "threshold": procurement_threshold,
+            },
+            output_payload={"action": action},
+        )
+
+    return confirmation
+
+
 # ================================
 # Main Chatbot Function
 # ================================
-def pharmacy_chatbot(user_message):
+def pharmacy_chatbot(user_message, trace: AgentTracer = None):
     global pending_medicine_choice
     global pending_order_data
 
@@ -641,6 +425,12 @@ def pharmacy_chatbot(user_message):
         pending_medicine_choice = None
         selected_order = pending_order_data
         pending_order_data = None
+        _trace_agent(
+            trace,
+            "Intent Agent",
+            input_payload={"selection": choice, "user_message": user_message},
+            output_payload=dict(selected_order),
+        )
 
     # Step 2: Partial stock confirmation (before prescription)
     if pending_partial_order is not None:
@@ -662,7 +452,11 @@ def pharmacy_chatbot(user_message):
                     "Please click 'Add Prescription' and upload a clear photo to continue."
                 )
 
-            confirmation = place_order(order)
+            confirmation = _execute_order_with_agent_traces(
+                order,
+                trace=trace,
+                stock_before=int(order.get("quantity", 0) or 0),
+            )
             pending_partial_order = None
             pending_partial_requires_rx = False
             return (
@@ -683,7 +477,7 @@ def pharmacy_chatbot(user_message):
             order = pending_prescription_order
             order["quantity"] = pending_final_quantity
 
-            confirmation = place_order(order)
+            confirmation = _execute_order_with_agent_traces(order, trace=trace)
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
@@ -743,6 +537,13 @@ def pharmacy_chatbot(user_message):
             current_order = dict(pending_prescription_order)
             current_order["quantity"] = final_qty
             latest_decision = safety_check(current_order)
+            _trace_agent(
+                trace,
+                "Safety Agent",
+                input_payload=current_order,
+                output_payload=dict(latest_decision),
+                status="ok" if latest_decision.get("status") != "Rejected" else "error",
+            )
 
             if latest_decision["status"] == "Rejected":
                 reason = str(latest_decision.get("reason", "Order rejected"))
@@ -752,6 +553,15 @@ def pharmacy_chatbot(user_message):
                 pending_partial_after_rx = False
                 _clear_prescription_upload()
                 if "out of stock" in reason.lower():
+                    _trace_agent(
+                        trace,
+                        "Procurement Agent",
+                        input_payload={
+                            "medicine_name": current_order.get("medicine_name"),
+                            "reason": reason,
+                        },
+                        output_payload={"action": "Create refill task"},
+                    )
                     pending_preorder_offer = {
                         "medicine_name": current_order.get("medicine_name"),
                         "refill_days": "3-5",
@@ -767,7 +577,11 @@ def pharmacy_chatbot(user_message):
             order = pending_prescription_order
             if latest_decision["status"] == "Partial":
                 order["quantity"] = int(latest_decision["stock"])
-                confirmation = place_order(order)
+                confirmation = _execute_order_with_agent_traces(
+                    order,
+                    trace=trace,
+                    stock_before=int(latest_decision.get("stock", 0) or 0),
+                )
                 pending_prescription_order = None
                 pending_final_quantity = None
                 pending_rx_confirmation = False
@@ -779,7 +593,11 @@ def pharmacy_chatbot(user_message):
                 )
 
             order["quantity"] = final_qty
-            confirmation = place_order(order)
+            confirmation = _execute_order_with_agent_traces(
+                order,
+                trace=trace,
+                stock_before=int(latest_decision.get("stock", 0) or 0),
+            )
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
@@ -833,6 +651,17 @@ def pharmacy_chatbot(user_message):
     # Step 6: Extract order (LLM)
     if selected_order is None:
         order = extract_order(user_message)
+        if "error" not in order:
+            _trace_agent(
+                trace,
+                "Intent Agent",
+                input_payload={"user_message": user_message},
+                output_payload={
+                    "medicine_name": order.get("medicine_name"),
+                    "quantity": order.get("quantity"),
+                    "unit": order.get("unit"),
+                },
+            )
 
         if "error" in order:
             err = order.get("error")
@@ -873,10 +702,26 @@ def pharmacy_chatbot(user_message):
 
     # Step 8: Safety check (stock + prescription)
     decision = safety_check(order)
+    _trace_agent(
+        trace,
+        "Safety Agent",
+        input_payload=dict(order),
+        output_payload=dict(decision),
+        status="ok" if decision.get("status") != "Rejected" else "error",
+    )
 
     if decision["status"] == "Rejected":
         reason = str(decision.get("reason", "Order rejected"))
         if "out of stock" in reason.lower():
+            _trace_agent(
+                trace,
+                "Procurement Agent",
+                input_payload={
+                    "medicine_name": order.get("medicine_name"),
+                    "reason": reason,
+                },
+                output_payload={"action": "Create refill task"},
+            )
             pending_preorder_offer = {
                 "medicine_name": order.get("medicine_name"),
                 "refill_days": "3-5",
@@ -921,5 +766,9 @@ def pharmacy_chatbot(user_message):
                 "Please click 'Add Prescription' and upload a clear photo to continue."
             )
 
-        confirmation = place_order(order)
+        confirmation = _execute_order_with_agent_traces(
+            order,
+            trace=trace,
+            stock_before=int(stock),
+        )
         return f"Stock available.\n{confirmation}"

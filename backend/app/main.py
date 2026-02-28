@@ -57,11 +57,40 @@ except ModuleNotFoundError:
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
+REPO_DIR = Path(__file__).resolve().parents[2]
 logger = logging.getLogger("pharma.langfuse")
 
 REFILL_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "Consumer Order History 1.xlsx"
 CONTACT_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "patient_contacts.csv"
 scheduler = None
+
+
+def _load_env_file() -> None:
+    env_path = REPO_DIR / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value[0] in {"'", '"'}
+        ):
+            value = value[1:-1]
+
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_env_file()
 
 app.add_middleware(
     CORSMiddleware,
@@ -133,7 +162,7 @@ langfuse_client = _init_langfuse()
 
 
 def _sanitize_reply(text: str) -> str:
-    phrase = r"Analyzing medicine, dosage, stock availability, and prescription rules\.\.\.|Analyzing medicine, dosage, stock availability, and prescription rules???"
+    phrase = r"Analyzing medicine, dosage, stock availability, and prescription rules\.\.\.|Analyzing medicine, dosage, stock availability, and prescription rules\?+"
     cleaned = re.sub(phrase, "", str(text or ""), flags=re.IGNORECASE)
     return cleaned.strip()
 
@@ -149,6 +178,32 @@ def _resolve_chat_result(result: Any) -> Dict[str, Any]:
         "reply": _sanitize_reply(result),
         "prescription_required": False,
     }
+
+
+def _build_agent_tracer(client: Optional[Langfuse]):
+    if client is None:
+        return None
+
+    def _trace_agent_step(
+        agent_name: str,
+        input_payload: Dict[str, Any],
+        output_payload: Dict[str, Any],
+        status: str,
+    ) -> None:
+        try:
+            with client.start_as_current_span(
+                name=agent_name,
+                input=input_payload or {},
+                metadata={
+                    "component": "pharmacy-agent",
+                    "status": status,
+                },
+            ):
+                client.update_current_span(output=output_payload or {})
+        except Exception as exc:
+            logger.exception("Langfuse agent-step trace failed for %s: %s", agent_name, exc)
+
+    return _trace_agent_step
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -169,7 +224,8 @@ def chat(req: ChatRequest):
             input={"message": user_message},
             metadata={"route": "/chat"},
         ):
-            result = _resolve_chat_result(pharmacy_chatbot(user_message))
+            tracer = _build_agent_tracer(langfuse_client)
+            result = _resolve_chat_result(pharmacy_chatbot(user_message, trace=tracer))
             langfuse_client.update_current_span(
                 output={
                     "reply": result["reply"],
@@ -210,7 +266,8 @@ def submit_prescription(req: PrescriptionSubmitRequest):
 
     set_prescription_upload_verification(record)
 
-    result = _resolve_chat_result(pharmacy_chatbot("upload prescription"))
+    tracer = _build_agent_tracer(langfuse_client)
+    result = _resolve_chat_result(pharmacy_chatbot("upload prescription", trace=tracer))
     return {"accepted": bool(record.get("verified")), "reply": result["reply"]}
 
 
