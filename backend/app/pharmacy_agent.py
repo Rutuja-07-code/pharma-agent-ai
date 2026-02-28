@@ -302,7 +302,7 @@
 """
 from order_extractor import extract_order
 from safety_agent import safety_check
-from order_executor import place_order
+from order_executor import place_order, refill_stock, quote_order
 from medicine_matcher import find_medicine_matches
 from medicine_lookup import search_medicine
 import re
@@ -482,7 +482,7 @@ def pharmacy_chatbot(user_message):
 
 from order_extractor import extract_order
 from safety_agent import safety_check
-from order_executor import place_order
+from order_executor import quote_order
 from medicine_matcher import find_medicine_matches
 from medicine_lookup import search_medicine
 import re
@@ -500,6 +500,7 @@ pending_rx_confirmation = False
 pending_partial_after_rx = False
 pending_partial_order = None
 pending_partial_requires_rx = False
+pending_preorder_offer = None
 
 
 def _is_order_intent(message):
@@ -536,6 +537,24 @@ def _is_order_intent(message):
     return bool(words.intersection(order_words) and words.intersection(quantity_units))
 
 
+def _payment_required_response(order, context_message):
+    quoted = quote_order(order)
+    if not quoted.get("ok"):
+        return f"Order cannot proceed: {quoted.get('reason', 'Unable to create payment request.')}"
+
+    return {
+        "type": "payment_required",
+        "message": context_message,
+        "payment": {
+            "medicine_name": quoted["medicine_name"],
+            "quantity": int(quoted["quantity"]),
+            "unit_price": float(quoted["unit_price"]),
+            "total_price": float(quoted["total_price"]),
+            "currency": "INR",
+        },
+    }
+
+
 # ================================
 # Main Chatbot Function
 # ================================
@@ -550,148 +569,160 @@ def pharmacy_chatbot(user_message):
     global pending_partial_after_rx
     global pending_partial_order
     global pending_partial_requires_rx
+    global pending_preorder_offer
 
-    msg = user_message.lower().strip()
+    msg = (user_message or "").lower().strip()
     selected_order = None
 
-    # =========================================
-    # ✅ STEP 0: Handle Multiple Medicine Choice
-    # =========================================
+    # Step 0: Out-of-stock pre-order confirmation
+    if pending_preorder_offer is not None:
+        medicine_name = pending_preorder_offer.get("medicine_name", "this medicine")
+        refill_days = pending_preorder_offer.get("refill_days", "3-5")
+
+        if msg in ["yes", "y", "confirm", "preorder", "pre-order"]:
+            pending_preorder_offer = None
+            return (
+                f"Pre-order confirmed for {medicine_name}.\n"
+                f"Expected refill in {refill_days} days.\n"
+                "We will notify you when stock is refilled."
+            )
+
+        if msg in ["no", "n", "cancel", "wait"]:
+            pending_preorder_offer = None
+            return "Okay, pre-order cancelled."
+
+        return "Do you want to place a pre-order? Reply 'Yes' or 'No'."
+
+    # Step 1: Handle multiple medicine choice
     if pending_medicine_choice is not None:
         if not msg.isdigit():
             return "Please reply with option number (1,2,3...)."
 
         choice = int(msg)
         if not (1 <= choice <= len(pending_medicine_choice)):
-            return "❌ Invalid option number."
+            return "Invalid option number."
 
         selected_name = pending_medicine_choice[choice - 1]
         if not pending_order_data:
             pending_medicine_choice = None
-            return "❌ Previous order context expired. Please enter your request again."
+            return "Previous order context expired. Please enter your request again."
 
-        # Update order medicine name
         pending_order_data["medicine_name"] = selected_name
-
-        # Clear choice state
         pending_medicine_choice = None
-
-        # Continue processing
         selected_order = pending_order_data
         pending_order_data = None
 
-    # =========================================
-    # ✅ STEP 1: Partial Stock Confirmation (Before Prescription)
-    # =========================================
+    # Step 2: Partial stock confirmation (before prescription)
     if pending_partial_order is not None:
         if msg in ["yes", "y", "confirm", "order"]:
             order = pending_partial_order
 
-            # If prescription is needed, ask only after user confirms partial order intent.
             if pending_partial_requires_rx:
                 pending_prescription_order = order
                 pending_final_quantity = int(order.get("quantity", 0))
 
                 pending_partial_order = None
                 pending_partial_requires_rx = False
-
                 pending_rx_confirmation = False
                 pending_partial_after_rx = True
 
-                return (
-                    "⚠️ This medicine requires a prescription.\n"
-                    "Do you have a prescription? (yes/no)"
-                )
-
-            confirmation = place_order(order)
+                return "This medicine requires a prescription. Do you have a prescription? (yes/no)"
 
             pending_partial_order = None
             pending_partial_requires_rx = False
-
-            return (
-                f"✅ Partial order placed successfully for {order['quantity']} units!\n\n"
-                f"{confirmation}"
+            return _payment_required_response(
+                order,
+                (
+                    f"Partial stock confirmed for {order['quantity']} units.\n"
+                    "Proceed to test payment to place this order."
+                ),
             )
 
         if msg in ["no", "n", "cancel", "wait"]:
             pending_partial_order = None
             pending_partial_requires_rx = False
-            return "Okay 👍 Order cancelled."
+            return "Okay, order cancelled."
 
         return "Only limited stock is available. Reply 'Yes' to order available quantity or 'No' to cancel."
 
-    # =========================================
-    # ✅ STEP 2: Final Confirmation After Prescription Upload
-    # =========================================
+    # Step 3: Final confirmation after prescription upload
     if pending_rx_confirmation:
-
         if msg in ["yes", "y", "confirm"]:
             order = pending_prescription_order
             order["quantity"] = pending_final_quantity
 
-            confirmation = place_order(order)
-
-            # Clear all pending states
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
 
-            return f"✅ Order Confirmed!\n\n{confirmation}"
+            return _payment_required_response(
+                order,
+                "Prescription and stock confirmed. Proceed to test payment to place your order.",
+            )
 
         if msg in ["no", "n", "cancel"]:
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
-
-            return "Okay 👍 Order cancelled."
+            return "Okay, order cancelled."
 
         return "Please reply 'Yes' to confirm or 'No' to cancel."
 
-    # =========================================
-    # ✅ STEP 3: Prescription Confirmation Handling
-    # =========================================
+    # Step 4: Prescription confirmation handling
     if pending_prescription_order is not None and not pending_rx_confirmation:
-
         if msg in ["yes", "y", "upload", "done", "upload prescription"]:
             requested_qty = int(pending_prescription_order.get("quantity", pending_final_quantity or 0))
             final_qty = int(pending_final_quantity or requested_qty)
 
-            # Re-check safety now to avoid stale stock/prescription state.
             current_order = dict(pending_prescription_order)
             current_order["quantity"] = final_qty
             latest_decision = safety_check(current_order)
 
             if latest_decision["status"] == "Rejected":
+                reason = str(latest_decision.get("reason", "Order rejected"))
                 pending_prescription_order = None
                 pending_final_quantity = None
                 pending_rx_confirmation = False
                 pending_partial_after_rx = False
-                return f"❌ Order Rejected: {latest_decision['reason']}"
+                if "out of stock" in reason.lower():
+                    pending_preorder_offer = {
+                        "medicine_name": current_order.get("medicine_name"),
+                        "refill_days": "3-5",
+                    }
+                    return (
+                        f"Order Rejected: {reason}.\n"
+                        "This medicine is currently out of stock.\n"
+                        "Expected refill in 3-5 days.\n"
+                        "Do you want to place a pre-order? (yes/no)"
+                    )
+                return f"Order Rejected: {reason}"
 
             order = pending_prescription_order
             if latest_decision["status"] == "Partial":
                 order["quantity"] = int(latest_decision["stock"])
-                confirmation = place_order(order)
                 pending_prescription_order = None
                 pending_final_quantity = None
                 pending_rx_confirmation = False
                 pending_partial_after_rx = False
-                return (
-                    f"⚠️ Only {order['quantity']} units are available (you requested {requested_qty}).\n"
-                    f"✅ Partial order confirmed.\n\n{confirmation}"
+                return _payment_required_response(
+                    order,
+                    (
+                        f"Only {order['quantity']} units are available (you requested {requested_qty}).\n"
+                        "Proceed to test payment to place the partial order."
+                    ),
                 )
 
             order["quantity"] = final_qty
-            confirmation = place_order(order)
-
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
-
-            return f"✅ Order Confirmed!\n\n{confirmation}"
+            return _payment_required_response(
+                order,
+                "Prescription verified. Proceed to test payment to place your order.",
+            )
 
         if msg in ["no", "n", "cancel"]:
             pending_prescription_order = None
@@ -702,13 +733,11 @@ def pharmacy_chatbot(user_message):
 
         return "Do you have a prescription? (yes/no)"
 
-    # =========================================
-    # ✅ STEP 4: Info Mode (no order intent)
-    # =========================================
+    # Step 5: Info mode (no order intent)
     if selected_order is None and not _is_order_intent(user_message):
         lookup = search_medicine(user_message)
         if lookup.get("status") != "Found":
-            return f"❌ {lookup.get('message', 'Medicine not available in our inventory.')}"
+            return lookup.get("message", "Medicine not available in our inventory.")
 
         rows = lookup.get("results", [])
         lines = []
@@ -717,81 +746,73 @@ def pharmacy_chatbot(user_message):
             stock = row.get("stock", "NA")
             rx = row.get("prescription_required", "NA")
             lines.append(f"- {name} | Stock: {stock} | Prescription: {rx}")
-        return "🔎 Medicine Info:\n" + "\n".join(lines)
+        return "Medicine Info:\n" + "\n".join(lines)
 
-    # =========================================
-    # ✅ STEP 5: Extract Order (LLM)
-    # =========================================
+    # Step 6: Extract order (LLM)
     if selected_order is None:
-            order = extract_order(user_message)
+        order = extract_order(user_message)
 
-            if "error" in order:
-                # Handle LLM service errors and extraction failures gracefully
-                err = order.get("error")
-                raw = order.get("raw_output")
-                if err and "LLM service unavailable" in err:
-                    return (
-                        "❌ Sorry, our order extraction service is temporarily unavailable. "
-                        "Please try again later or contact support if the problem persists."
-                    )
-                if raw:
-                    return f"❌ Could not understand your request.\nError: {err}\nRaw Output: {raw}"
-                else:
-                    return f"❌ Could not understand your request.\nError: {err}"
+        if "error" in order:
+            err = order.get("error")
+            raw = order.get("raw_output")
+            if err and "LLM service unavailable" in err:
+                return (
+                    "Sorry, our order extraction service is temporarily unavailable. "
+                    "Please try again later or contact support if the problem persists."
+                )
+            if raw:
+                return f"Could not understand your request.\nError: {err}\nRaw Output: {raw}"
+            return f"Could not understand your request.\nError: {err}"
 
-            required_fields = {"medicine_name", "quantity", "unit"}
-            if not required_fields.issubset(order.keys()):
-                return f"❌ Missing fields: {required_fields - set(order.keys())}"
+        required_fields = {"medicine_name", "quantity", "unit"}
+        if not required_fields.issubset(order.keys()):
+            return f"Missing fields: {required_fields - set(order.keys())}"
     else:
         order = selected_order
 
-    # =========================================
-    # ✅ STEP 6: Medicine Name Matching
-    # =========================================
+    # Step 7: Medicine name matching
     if selected_order is None:
         matches = find_medicine_matches(order["medicine_name"])
 
         if matches is None:
-            return f"❌ Medicine '{order['medicine_name']}' not found in inventory."
+            return f"Medicine '{order['medicine_name']}' not found in inventory."
 
-        # Single match → replace with full name
         if isinstance(matches, str):
             order["medicine_name"] = matches
-
-        # Multiple matches → ask user choice
         else:
             pending_medicine_choice = matches
             pending_order_data = order
-
-            options = "\n".join(
-                [f"{i+1}. {name}" for i, name in enumerate(matches)]
-            )
-
+            options = "\n".join([f"{i+1}. {name}" for i, name in enumerate(matches)])
             return (
-                "⚠️ Multiple medicines found. Which one do you want?\n\n"
+                "Multiple medicines found. Which one do you want?\n\n"
                 f"{options}\n\n"
                 "Reply with option number (1,2,3...)."
             )
 
-    # =========================================
-    # ✅ STEP 7: Safety Check (Stock + Prescription)
-    # =========================================
+    # Step 8: Safety check (stock + prescription)
     decision = safety_check(order)
 
     if decision["status"] == "Rejected":
-        return f"❌ Order Rejected: {decision['reason']}"
+        reason = str(decision.get("reason", "Order rejected"))
+        if "out of stock" in reason.lower():
+            pending_preorder_offer = {
+                "medicine_name": order.get("medicine_name"),
+                "refill_days": "3-5",
+            }
+            return (
+                f"Order Rejected: {reason}.\n"
+                "This medicine is currently out of stock.\n"
+                "Expected refill in 3-5 days.\n"
+                "Do you want to place a pre-order? (yes/no)"
+            )
+        return f"Order Rejected: {reason}"
 
     stock = decision["stock"]
     rx_required = str(decision["prescription_required"]).strip().lower() == "yes"
 
-    # =========================================
-    # ✅ STEP 8: Partial Stock Case
-    # =========================================
+    # Step 9: Partial stock case
     if decision["status"] == "Partial":
-
         available = stock
-
-        # Ask stock confirmation first in all partial-stock cases.
         partial_order = dict(order)
         partial_order["quantity"] = available
 
@@ -800,28 +821,21 @@ def pharmacy_chatbot(user_message):
         pending_partial_after_rx = False
 
         return (
-            f"⚠️ Stock Update: Only {available} units are available (you requested {decision.get('requested', order.get('quantity'))}).\n"
+            f"Stock Update: Only {available} units are available (you requested {decision.get('requested', order.get('quantity'))}).\n"
             f"Would you like to order {available} units?\n"
             "Reply 'Yes' to continue or 'No' to cancel."
         )
 
-    # =========================================
-    # ✅ STEP 9: Full Stock Case
-    # =========================================
+    # Step 10: Full stock case
     if decision["status"] == "InStock":
-
-        # Prescription required
         if rx_required:
             pending_prescription_order = order
             pending_final_quantity = order["quantity"]
             pending_rx_confirmation = False
             pending_partial_after_rx = False
+            return "Prescription Required. Do you have a prescription? (yes/no)"
 
-            return (
-                "⚠️ Prescription Required.\n"
-                "Do you have a prescription? (yes/no)"
-            )
-
-        # Normal medicine → place order
-        confirmation = place_order(order)
-        return f"✅ Order Confirmed!\n\n{confirmation}"
+        return _payment_required_response(
+            order,
+            "Stock available. Proceed to test payment to place your order.",
+        )

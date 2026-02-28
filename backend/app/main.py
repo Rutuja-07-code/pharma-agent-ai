@@ -2,9 +2,9 @@ from pathlib import Path
 import logging
 import os
 import re
-from typing import Optional
+from typing import Optional, Any, Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langfuse import Langfuse
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from pharmacy_agent import pharmacy_chatbot
 from inventory_api import router as inventory_router
+from order_executor import place_order
 
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -36,6 +37,37 @@ class ChatRequest(BaseModel):
 
 # Response format back to frontend
 class ChatResponse(BaseModel):
+    reply: str
+    payment_required: bool = False
+    payment: Optional[Dict[str, Any]] = None
+
+
+class CreatePaymentRequest(BaseModel):
+    medicine_name: str
+    quantity: int
+    total_price: float
+    currency: str = "INR"
+
+
+class CreatePaymentResponse(BaseModel):
+    provider: str = "upi_intent"
+    amount: int
+    currency: str
+    name: str
+    description: str
+    upi_link: str = ""
+    qr_url: str = ""
+
+
+class ConfirmPaymentRequest(BaseModel):
+    medicine_name: str
+    quantity: int
+    payment_mode: str = "upi_intent"
+    upi_confirmed: bool = False
+
+
+class ConfirmPaymentResponse(BaseModel):
+    placed: bool
     reply: str
 
 
@@ -76,6 +108,21 @@ def _sanitize_reply(text: str) -> str:
     return cleaned.strip()
 
 
+def _resolve_chat_result(result: Any) -> Dict[str, Any]:
+    if isinstance(result, dict) and result.get("type") == "payment_required":
+        return {
+            "reply": _sanitize_reply(result.get("message", "Payment required to place order.")),
+            "payment_required": True,
+            "payment": result.get("payment"),
+        }
+
+    return {
+        "reply": _sanitize_reply(result),
+        "payment_required": False,
+        "payment": None,
+    }
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     global langfuse_client
@@ -85,9 +132,8 @@ def chat(req: ChatRequest):
         langfuse_client = _init_langfuse()
 
     if langfuse_client is None:
-        bot_reply = pharmacy_chatbot(user_message)
-        bot_reply = _sanitize_reply(bot_reply)
-        return {"reply": bot_reply}
+        result = _resolve_chat_result(pharmacy_chatbot(user_message))
+        return result
 
     try:
         with langfuse_client.start_as_current_span(
@@ -95,10 +141,14 @@ def chat(req: ChatRequest):
             input={"message": user_message},
             metadata={"route": "/chat"},
         ):
-            bot_reply = pharmacy_chatbot(user_message)
-            bot_reply = _sanitize_reply(bot_reply)
-            langfuse_client.update_current_span(output={"reply": bot_reply})
-            return {"reply": bot_reply}
+            result = _resolve_chat_result(pharmacy_chatbot(user_message))
+            langfuse_client.update_current_span(
+                output={
+                    "reply": result["reply"],
+                    "payment_required": result["payment_required"],
+                }
+            )
+            return result
     except Exception as exc:
         try:
             langfuse_client.update_current_span(
@@ -110,6 +160,63 @@ def chat(req: ChatRequest):
         raise
     finally:
         langfuse_client.flush()
+
+
+@app.post("/payment/create", response_model=CreatePaymentResponse)
+def create_payment(req: CreatePaymentRequest):
+    amount = max(1, int(round(float(req.total_price) * 100)))
+    currency = "INR"
+    name = "Medico Pharmacy"
+    description = f"Order for {req.medicine_name} x {req.quantity}"
+
+    # UPI intent mode only (personal UPI ID).
+    personal_upi_id = os.getenv("UPI_ID", "").strip()
+    if not personal_upi_id:
+        raise HTTPException(
+            status_code=500,
+            detail="UPI_ID is not configured. Set UPI_ID (example: yourname@oksbi).",
+        )
+
+    payee_name = os.getenv("UPI_PAYEE_NAME", "Medico Pharmacy")
+    txn_note = f"Medicine order {req.medicine_name}"
+    txn_ref = f"MED{abs(hash((req.medicine_name, req.quantity, amount))) % 1000000000}"
+    upi_link = (
+        "upi://pay"
+        f"?pa={personal_upi_id}"
+        f"&pn={payee_name}"
+        f"&am={amount/100:.2f}"
+        f"&cu=INR"
+        f"&tn={txn_note}"
+        f"&tr={txn_ref}"
+    )
+    qr_url = (
+        "https://api.qrserver.com/v1/create-qr-code/"
+        f"?size=260x260&data={upi_link}"
+    )
+
+    return {
+        "provider": "upi_intent",
+        "amount": amount,
+        "currency": currency,
+        "name": name,
+        "description": description,
+        "upi_link": upi_link,
+        "qr_url": qr_url,
+    }
+
+
+@app.post("/payment/confirm", response_model=ConfirmPaymentResponse)
+def confirm_payment(req: ConfirmPaymentRequest):
+    if req.payment_mode != "upi_intent":
+        raise HTTPException(status_code=400, detail="Unsupported payment mode.")
+    if not req.upi_confirmed:
+        raise HTTPException(status_code=400, detail="UPI payment not confirmed.")
+
+    confirmation = place_order(
+        {"medicine_name": req.medicine_name, "quantity": int(req.quantity)}
+    )
+    placed = "Order Confirmed!" in str(confirmation)
+    return {"placed": placed, "reply": _sanitize_reply(confirmation)}
 
 
 # Serve frontend files from the same FastAPI app so only one server is needed.

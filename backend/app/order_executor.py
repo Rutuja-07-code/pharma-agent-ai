@@ -35,6 +35,41 @@ def _safe_unit_price(value):
     return DEFAULT_PRICE
 
 
+def quote_order(order):
+    med = order["medicine_name"]
+    qty = int(order["quantity"])
+    if qty <= 0:
+        return {"ok": False, "reason": "Quantity must be greater than 0."}
+
+    df = pd.read_csv(DATA_FILE)
+    match = df[df["medicine_name"].str.contains(med, case=False, na=False)]
+    if match.empty:
+        return {"ok": False, "reason": f"Medicine '{med}' not found in inventory."}
+
+    idx = match.index[0]
+    stock = int(df.loc[idx, "stock"])
+    if stock <= 0:
+        return {"ok": False, "reason": f"Cannot place order. '{med}' is out of stock."}
+    if qty > stock:
+        return {
+            "ok": False,
+            "reason": f"Only {stock} units are available. Please order {stock} or less.",
+        }
+
+    med_name = str(df.loc[idx, "medicine_name"]).strip()
+    price_map = _load_price_map()
+    unit_price = _safe_unit_price(price_map.get(med_name.lower(), 0.0))
+    total_price = unit_price * qty
+
+    return {
+        "ok": True,
+        "medicine_name": med_name,
+        "quantity": qty,
+        "unit_price": unit_price,
+        "total_price": total_price,
+    }
+
+
 def place_order(order):
     med = order["medicine_name"]
     qty = int(order["quantity"])
@@ -73,3 +108,27 @@ def place_order(order):
         f"Unit Price: EUR {unit_price:.2f}\n"
         f"Total Price: EUR {total_price:.2f}\n"
     )
+
+
+def refill_stock(medicine_name, refill_quantity=105):
+    df = pd.read_csv(DATA_FILE)
+    match = df[df["medicine_name"].str.contains(medicine_name, case=False, na=False)]
+
+    if match.empty:
+        return {"ok": False, "reason": f"Medicine '{medicine_name}' not found in inventory."}
+
+    idx = match.index[0]
+    med_name = str(df.loc[idx, "medicine_name"])
+    current_stock = int(df.loc[idx, "stock"])
+    added = int(refill_quantity)
+    new_stock = current_stock + added
+
+    df.loc[idx, "stock"] = new_stock
+    df.to_csv(DATA_FILE, index=False)
+
+    return {
+        "ok": True,
+        "medicine_name": med_name,
+        "added": added,
+        "new_stock": new_stock,
+    }
