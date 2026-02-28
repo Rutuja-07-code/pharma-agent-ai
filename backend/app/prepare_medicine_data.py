@@ -23,10 +23,23 @@ df.columns = (
 )
 
 # Rename for simplicity
-df = df.rename(columns={"product name": "medicine_name", "medicine name": "medicine_name"})
+df = df.rename(
+    columns={
+        "product name": "medicine_name",
+        "medicine name": "medicine_name",
+        "price rec": "price",
+    }
+)
 
-# Keep only useful column
-df = df[["medicine_name"]]
+# Keep only useful columns from source
+keep_cols = [c for c in ["medicine_name", "price"] if c in df.columns]
+df = df[keep_cols]
+
+# Ensure price is numeric and rounded
+if "price" in df.columns:
+    df["price"] = pd.to_numeric(df["price"], errors="coerce").round(2)
+else:
+    df["price"] = 0.0
 
 # Add dummy stock levels (random)
 df["stock"] = [random.randint(10, 100) for _ in range(len(df))]
