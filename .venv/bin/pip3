@@ -1,4 +1,4 @@
-#!/Users/rutujabarde/Documents/GitHub/pharma_agent_ai/.venv/bin/python3
+#!/Users/rutujabarde/Documents/GitHub/pharma_agent_ai/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

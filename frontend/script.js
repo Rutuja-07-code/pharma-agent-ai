@@ -7,11 +7,52 @@ const chatHistoryList = document.querySelector("#chat-history-list");
 const submitPrescriptionBtn = document.querySelector("#submit-prescription-btn");
 const prescriptionPhotoInput = document.querySelector("#prescription-photo-input");
 
-const BACKEND_URL = "http://127.0.0.1:8000/chat";
-const INVENTORY_URL = "http://127.0.0.1:8000/inventory";
-const PRESCRIPTION_SUBMIT_URL = "http://127.0.0.1:8000/prescription/submit";
-const PAYMENT_CREATE_URL = "http://127.0.0.1:8000/payment/create";
-const PAYMENT_CONFIRM_URL = "http://127.0.0.1:8000/payment/confirm";
+function normalizeBaseUrl(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+function getBackendCandidates() {
+  const explicit = normalizeBaseUrl(
+    localStorage.getItem("PHARMA_API_BASE") || window.PHARMA_API_BASE
+  );
+  const candidates = [];
+
+  if (explicit) candidates.push(explicit);
+  if (!explicit) candidates.push("http://127.0.0.1:8003");
+
+  if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
+    const sameOrigin = normalizeBaseUrl(window.location.origin);
+    if (sameOrigin) candidates.push(sameOrigin);
+  }
+
+  ["8003", "8000", "8001", "8002"].forEach((port) => {
+    candidates.push(`http://127.0.0.1:${port}`);
+  });
+
+  return [...new Set(candidates)];
+}
+
+const BACKEND_BASE_CANDIDATES = getBackendCandidates();
+let ACTIVE_BACKEND_BASE = BACKEND_BASE_CANDIDATES[0];
+
+async function fetchWithBackendFallback(path, options = {}) {
+  let lastError = null;
+
+  for (const base of BACKEND_BASE_CANDIDATES) {
+    const url = `${base}${path}`;
+    try {
+      const response = await fetch(url, options);
+      if (response.status === 404) continue;
+      ACTIVE_BACKEND_BASE = base;
+      return response;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error("Backend not reachable on configured candidates.");
+}
 const CHAT_STORAGE_KEY = "pharma_chat_messages"; // legacy single-thread key
 const CHAT_SESSIONS_STORAGE_KEY = "pharma_chat_sessions";
 const ACTIVE_CHAT_ID_STORAGE_KEY = "pharma_active_chat_id";
@@ -330,7 +371,7 @@ function hideTypingIndicator() {
 
 async function getInventoryPriceMap() {
   try {
-    const res = await fetch(INVENTORY_URL);
+    const res = await fetchWithBackendFallback("/inventory");
     if (!res.ok) return {};
     const rows = await res.json();
     if (!Array.isArray(rows)) return {};
@@ -422,7 +463,7 @@ async function handlePrescriptionPhotoSelected(event) {
     appendMessage("user", "Add Prescription");
     appendMessage("ai", "Uploading prescription photo...");
 
-    const res = await fetch(PRESCRIPTION_SUBMIT_URL, {
+    const res = await fetchWithBackendFallback("/prescription/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -465,7 +506,7 @@ async function startUpiIntentPayment(payment) {
 
   let orderPayload;
   try {
-    const createRes = await fetch(PAYMENT_CREATE_URL, {
+    const createRes = await fetchWithBackendFallback("/payment/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -523,7 +564,7 @@ async function startUpiIntentPayment(payment) {
   }
 
   try {
-    const confirmRes = await fetch(PAYMENT_CONFIRM_URL, {
+    const confirmRes = await fetchWithBackendFallback("/payment/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -565,7 +606,7 @@ async function sendMessage(textFromVoice) {
   showTypingIndicator();
 
   try {
-    const res = await fetch(BACKEND_URL, {
+    const res = await fetchWithBackendFallback("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
@@ -587,7 +628,7 @@ async function sendMessage(textFromVoice) {
     hideTypingIndicator();
     appendMessage(
       "ai",
-      "Cannot connect to backend. Start backend on http://127.0.0.1:8000."
+      `Cannot connect to backend. Set localStorage PHARMA_API_BASE (example: http://127.0.0.1:8003). Tried: ${BACKEND_BASE_CANDIDATES.join(", ")}`
     );
     console.error(err);
   } finally {
@@ -603,16 +644,28 @@ const SpeechRecognition =
 if (SpeechRecognition) {
   const recognition = new SpeechRecognition();
   recognition.lang = "en-IN";
+  recognition.continuous = false;
+  recognition.interimResults = false;
 
   const micBtn = document.querySelector("#mic-btn");
 
   if (micBtn) {
-    micBtn.addEventListener("click", () => recognition.start());
+    micBtn.addEventListener("click", () => {
+      try {
+        recognition.start();
+      } catch (err) {
+        appendMessage("ai", "Microphone could not start. Check browser mic permission.");
+      }
+    });
   }
 
   recognition.onresult = (e) => {
     const voiceText = e.results[0][0].transcript;
     sendMessage(voiceText);
+  };
+
+  recognition.onerror = () => {
+    appendMessage("ai", "Voice input failed. Allow microphone permission and try again.");
   };
 } else {
   const micBtn = document.querySelector("#mic-btn");

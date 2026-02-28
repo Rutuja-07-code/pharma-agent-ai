@@ -441,7 +441,10 @@
         checkAdminAccess();
 
         try {
-          const res = await fetch('http://127.0.0.1:8000/inventory');
+          const base =
+            (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") ||
+            "http://127.0.0.1:8003";
+          const res = await fetch(`${base}/inventory`);
           inventoryData = await res.json();
         } catch (e) {
           inventoryData = [];

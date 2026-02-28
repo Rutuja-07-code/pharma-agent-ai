@@ -89,7 +89,10 @@
 
       async function loadMedicines() {
         try {
-          const res = await fetch("http://127.0.0.1:8000/inventory");
+          const base =
+            (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") ||
+            "http://127.0.0.1:8003";
+          const res = await fetch(`${base}/inventory`);
           if (!res.ok) throw new Error("Inventory fetch failed");
           const data = await res.json();
           renderMedicines(data);

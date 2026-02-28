@@ -4,7 +4,7 @@ import os
 import re
 from typing import Optional, Any, Dict
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langfuse import Langfuse
@@ -42,6 +42,11 @@ try:
     from backend.app.refill_engine import get_due_refills
 except ModuleNotFoundError:
     from refill_engine import get_due_refills
+
+try:
+    from backend.app.whatsapp_service import run_daily_whatsapp_reminders
+except ModuleNotFoundError:
+    from whatsapp_service import run_daily_whatsapp_reminders
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -225,6 +230,17 @@ async def upload_prescription(image: UploadFile = File(...)):
     return {"extracted_text": extracted_text}
 
 
+def _int_env(name: str, default: int, min_value: int, max_value: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(min_value, min(max_value, value))
+
+
 @app.get("/admin/due-refills")
 def show_due_refills():
     due_df = get_due_refills(str(REFILL_FILE_PATH))
@@ -257,9 +273,45 @@ def admin_send_reminders(req: AdminReminderRequest):
     )
 
 
+@app.post("/webhooks/whatsapp")
+async def whatsapp_inbound_webhook(request: Request):
+    """
+    Twilio WhatsApp inbound webhook endpoint.
+    Configure this URL in Twilio Sandbox to override default auto-replies.
+    """
+    try:
+        from twilio.twiml.messaging_response import MessagingResponse
+    except Exception:
+        return Response(
+            content="<Response><Message>Server misconfigured: twilio package missing.</Message></Response>",
+            media_type="application/xml",
+        )
+
+    form = await request.form()
+    incoming_text = str(form.get("Body", "")).strip().lower()
+
+    twiml = MessagingResponse()
+    if incoming_text == "yes":
+        twiml.message(
+            "Thanks. Your refill request is confirmed. Our team will process your order shortly."
+        )
+    else:
+        twiml.message("Reply YES to confirm your refill request.")
+
+    return Response(content=str(twiml), media_type="application/xml")
+
+
 def _run_due_refill_job():
     due_df = get_due_refills(str(REFILL_FILE_PATH))
     logger.info("Due refill scheduler job completed. rows=%s", len(due_df))
+
+    whatsapp_enabled = os.getenv("WHATSAPP_REMINDER_ENABLED", "false").lower() == "true"
+    if whatsapp_enabled:
+        try:
+            summary = run_daily_whatsapp_reminders()
+            logger.info("WhatsApp reminder job completed: %s", summary)
+        except Exception as exc:
+            logger.exception("WhatsApp reminder job failed: %s", exc)
 
 
 @app.on_event("startup")
@@ -269,10 +321,24 @@ def start_scheduler():
         logger.warning("APScheduler not installed. Skipping due-refill scheduler startup.")
         return
     if scheduler is None:
+        hour = _int_env("REMINDER_SCHEDULE_HOUR", 9, 0, 23)
+        minute = _int_env("REMINDER_SCHEDULE_MINUTE", 0, 0, 59)
+        run_on_startup = os.getenv("REMINDER_RUN_ON_STARTUP", "false").lower() == "true"
+
         scheduler = BackgroundScheduler()
-        scheduler.add_job(_run_due_refill_job, "interval", hours=24, id="due_refill_job", replace_existing=True)
+        scheduler.add_job(
+            _run_due_refill_job,
+            trigger="cron",
+            hour=hour,
+            minute=minute,
+            id="due_refill_job",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
         scheduler.start()
-        logger.info("Due-refill scheduler started (every 24 hours).")
+        logger.info("Due-refill scheduler started (daily at %02d:%02d).", hour, minute)
+        if run_on_startup:
+            _run_due_refill_job()
 
 
 @app.on_event("shutdown")
@@ -285,6 +351,7 @@ def stop_scheduler():
 
 
 # Serve frontend files from the same FastAPI app so only one server is needed.
+# Keep this at the end so API routes like /admin/* are matched first.
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
