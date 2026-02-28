@@ -1,0 +1,15 @@
+{"timestamp": "2026-02-28T14:16:09.265960+00:00", "medicine_name": "Vividrin\u00ae iso EDO\u00ae antiallergische Augentropfen", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.265960+00:00", "medicine_name": "Aqualibra 80 mg/90 mg/180 mg Filmtabletten", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.265960+00:00", "medicine_name": "Cromo-ratiopharm\u00ae Augentropfen Einzeldosis", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.266952+00:00", "medicine_name": "Iberogast\u00ae Classic, Fl\u00fcssigkeit zum Einnehmen", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.266952+00:00", "medicine_name": "Augentropfen RedCare", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.266952+00:00", "medicine_name": "Paracetamol apodiscounter 500 mg Tabletten", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.266952+00:00", "medicine_name": "Vitasprint Duo Energie", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Redcare Wundschutzcreme", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Cetaphil Sanft gl\u00e4ttende SA Reinigung", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Livocab\u00ae direkt Augentropfen, 0,05 % Augentropfen, Suspension", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Vitasprint B12 Kapseln", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Sinupret\u00ae Saft", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:16:09.267951+00:00", "medicine_name": "Diclo-ratiopharm Schmerzgel", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T14:23:28.533662+00:00", "medicine_name": "Centrum Vital+ Mentale Leistung", "previous_stock": 8, "new_stock": 60, "added_units": 52, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-02-28T18:34:08.680185+00:00", "medicine_name": "Hyaluron-ratiopharm\u00ae Augentropfen", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}

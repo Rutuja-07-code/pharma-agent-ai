@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Medico — AI Pharmacist</title>
+    <title>Medico - AI Pharmacist</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
         <div class="topbar-left">
-          <a href="dashboard.html" class="back">←</a>
+          <a href="dashboard.html" class="back">&larr;</a>
           <h2 class="chat-title">AI Pharmacist</h2>
         </div>
       </div>
@@ -26,14 +26,15 @@
         <div class="chat" id="chat" role="log" aria-live="polite"></div>
         <div class="chat-input-wrap">
           <input id="chat-input" type="text" placeholder="Enter your question or request here..." aria-label="Chat input" />
-          <button id="mic-btn" type="button" aria-label="Record voice">🎤</button>
+          <button id="mic-btn" type="button" aria-label="Record voice">Mic</button>
+          <button id="submit-prescription-btn" type="button" style="display: none;">Add Prescription</button>
+          <input id="prescription-photo-input" type="file" accept="image/*" capture="environment" style="display: none;" />
           <button id="send-btn" type="button">Send</button>
           <button id="new-chat-btn" type="button">New Chat</button>
         </div>
       </div>
     </main>
 
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

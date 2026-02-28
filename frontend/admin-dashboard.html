@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Medico — Admin Dashboard</title>
+    <title>Medico - Admin Dashboard</title>
     <link rel="stylesheet" href="style.css" />
     <style>
       .admin-header {
@@ -12,14 +12,14 @@
         align-items: center;
         margin-bottom: 24px;
       }
-      
+
       .admin-stats {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 16px;
         margin-bottom: 24px;
       }
-      
+
       .stat-card {
         background: var(--card);
         border: 1px solid var(--border);
@@ -28,7 +28,7 @@
         text-align: center;
         box-shadow: var(--shadow);
       }
-      
+
       .stat-card h4 {
         color: var(--muted);
         font-size: 0.9rem;
@@ -36,13 +36,13 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
-      
+
       .stat-card .value {
         font-size: 28px;
         font-weight: bold;
         color: var(--accent);
       }
-      
+
       .logout-btn {
         background: #dc3545;
         color: white;
@@ -52,22 +52,22 @@
         cursor: pointer;
         font-weight: 600;
       }
-      
+
       .logout-btn:hover {
         background: #c82333;
       }
-      
+
       .admin-section {
         margin-bottom: 28px;
       }
-      
+
       .section-title {
         font-size: 18px;
         font-weight: 600;
         margin-bottom: 16px;
         color: #0b1220;
       }
-      
+
       .table-container {
         background: var(--card);
         border: 1px solid var(--border);
@@ -75,12 +75,12 @@
         overflow: hidden;
         box-shadow: var(--shadow);
       }
-      
+
       table {
         width: 100%;
         border-collapse: collapse;
       }
-      
+
       th {
         background: #f3f4f6;
         padding: 14px;
@@ -89,21 +89,21 @@
         color: #0b1220;
         border-bottom: 1px solid var(--border);
       }
-      
+
       td {
         padding: 14px;
         border-bottom: 1px solid var(--border);
         color: #0f172a;
       }
-      
+
       tr:last-child td {
         border-bottom: none;
       }
-      
+
       tr:hover {
         background: #f9f9f9;
       }
-      
+
       .status-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -111,54 +111,37 @@
         font-size: 0.85rem;
         font-weight: 600;
       }
-      
+
       .status-in-stock {
         background: #ecfdf5;
         color: #065f46;
       }
-      
+
       .status-low {
         background: #fef3c7;
         color: #a16207;
       }
-      
+
       .status-out {
         background: #fee2e2;
         color: #7f1d1d;
       }
-      
-      .chart-container {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 20px;
-        box-shadow: var(--shadow);
-      }
-      
-      .chart-placeholder {
-        height: 300px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--muted);
-        font-size: 16px;
-      }
-      
+
       @media (max-width: 1200px) {
         .admin-stats {
           grid-template-columns: repeat(2, 1fr);
         }
       }
-      
+
       @media (max-width: 768px) {
         .admin-stats {
           grid-template-columns: 1fr;
         }
-        
+
         table {
           font-size: 0.9rem;
         }
-        
+
         th, td {
           padding: 10px;
         }
@@ -191,11 +174,10 @@
           <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
-        <!-- Statistics Cards -->
         <section class="admin-stats">
           <div class="stat-card">
             <h4>Total Medicines</h4>
-            <div class="value" id="total-medicines">156</div>
+            <div class="value" id="total-medicines">0</div>
           </div>
           <div class="stat-card">
             <h4>Registered Users</h4>
@@ -203,17 +185,16 @@
           </div>
           <div class="stat-card">
             <h4>Low Stock Items</h4>
-            <div class="value" id="low-stock">12</div>
+            <div class="value" id="low-stock">0</div>
           </div>
           <div class="stat-card">
             <h4>Out of Stock</h4>
-            <div class="value" id="out-of-stock">3</div>
+            <div class="value" id="out-of-stock">0</div>
           </div>
         </section>
 
-        <!-- Inventory Section -->
         <section class="admin-section">
-          <h2 class="section-title">📦 Medicine Inventory</h2>
+          <h2 class="section-title">Medicine Inventory</h2>
           <div class="table-container">
             <table id="inventory-table">
               <thead>
@@ -227,16 +208,32 @@
                   <th>Status</th>
                 </tr>
               </thead>
-              <tbody id="inventory-body">
-                <!-- Will be populated by JavaScript -->
-              </tbody>
+              <tbody id="inventory-body"></tbody>
             </table>
           </div>
         </section>
 
-        <!-- Sales Overview -->
         <section class="admin-section">
-          <h2 class="section-title">📊 Sales Overview</h2>
+          <h2 class="section-title">Auto Refill Records</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp (UTC)</th>
+                  <th>Medicine Name</th>
+                  <th>Previous Stock</th>
+                  <th>Added Units</th>
+                  <th>New Stock</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody id="refill-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="admin-section">
+          <h2 class="section-title">Sales Overview</h2>
           <div class="table-container">
             <table>
               <thead>
@@ -248,16 +245,13 @@
                   <th>Items Sold</th>
                 </tr>
               </thead>
-              <tbody id="sales-body">
-                <!-- Will be populated by JavaScript -->
-              </tbody>
+              <tbody id="sales-body"></tbody>
             </table>
           </div>
         </section>
 
-        <!-- Top Products -->
         <section class="admin-section">
-          <h2 class="section-title">⭐ Top Selling Products</h2>
+          <h2 class="section-title">Top Selling Products</h2>
           <div class="table-container">
             <table>
               <thead>
@@ -269,9 +263,7 @@
                   <th>Trend</th>
                 </tr>
               </thead>
-              <tbody id="top-products-body">
-                <!-- Will be populated by JavaScript -->
-              </tbody>
+              <tbody id="top-products-body"></tbody>
             </table>
           </div>
         </section>
@@ -287,37 +279,32 @@
                   <th>Phone Number</th>
                 </tr>
               </thead>
-              <tbody id="users-body">
-                <!-- Will be populated by JavaScript -->
-              </tbody>
+              <tbody id="users-body"></tbody>
             </table>
           </div>
         </section>
-
       </div>
     </main>
 
     <footer class="site-footer">
-      <div class="page-inner">© CureOS - Admin Panel</div>
+      <div class="page-inner">&copy; CureOS - Admin Panel</div>
     </footer>
 
     <script>
-      // Check if user is logged in
       function checkAdminAccess() {
         if (!localStorage.getItem('adminLoggedIn')) {
           window.location.href = 'admin-login.html';
         }
       }
 
-      // Logout function
       function logout() {
         localStorage.removeItem('adminLoggedIn');
         localStorage.removeItem('adminEmail');
         window.location.href = 'admin-login.html';
       }
 
-      // Fetch real inventory data from backend
       let inventoryData = [];
+      let refillLogData = [];
 
       const salesData = [
         { date: 'Feb 23, 2026', orders: 42, revenue: 8500, avgOrder: 202, items: 156 },
@@ -328,18 +315,17 @@
       ];
 
       const topProducts = [
-        { rank: 1, name: 'Paracetamol 650mg', units: 1240, revenue: 5580, trend: '↑ 12%' },
-        { rank: 2, name: 'Aspirin 500mg', units: 980, revenue: 4900, trend: '↑ 8%' },
-        { rank: 3, name: 'Multivitamin', units: 850, revenue: 5950, trend: '↓ 3%' },
-        { rank: 4, name: 'Vitamin D3', units: 720, revenue: 1800, trend: '↑ 15%' },
-        { rank: 5, name: 'Amoxicillin 250mg', units: 560, revenue: 6720, trend: '↑ 5%' },
+        { rank: 1, name: 'Paracetamol 650mg', units: 1240, revenue: 5580, trend: 'up 12%' },
+        { rank: 2, name: 'Aspirin 500mg', units: 980, revenue: 4900, trend: 'up 8%' },
+        { rank: 3, name: 'Multivitamin', units: 850, revenue: 5950, trend: 'down 3%' },
+        { rank: 4, name: 'Vitamin D3', units: 720, revenue: 1800, trend: 'up 15%' },
+        { rank: 5, name: 'Amoxicillin 250mg', units: 560, revenue: 6720, trend: 'up 5%' },
       ];
 
       function getRegisteredUsers() {
         const users = JSON.parse(localStorage.getItem('cureos_users') || '[]');
         if (Array.isArray(users) && users.length > 0) return users;
 
-        // Backward compatibility with older single-user storage.
         const legacy = JSON.parse(localStorage.getItem('cureos_user') || '{}');
         if (legacy && (legacy.username || legacy.name || legacy.phone)) {
           return [legacy];
@@ -369,11 +355,9 @@
         `).join('');
       }
 
-      // Populate inventory table
       function populateInventory() {
         const tbody = document.getElementById('inventory-body');
         tbody.innerHTML = inventoryData.map(item => {
-          // Status logic: in-stock, low, out
           let status = 'in-stock';
           if (item.stock === 0) status = 'out';
           else if (item.stock < 10) status = 'low';
@@ -385,29 +369,50 @@
               <td>-</td>
               <td>-</td>
               <td>${item.stock}</td>
-              <td>-</td>
-              <td>-</td>
+              <td>${Number(item.price || 0).toFixed(2)}</td>
+              <td>${(Number(item.price || 0) * Number(item.stock || 0)).toFixed(2)}</td>
               <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             </tr>
           `;
         }).join('');
       }
 
-      // Populate sales table
+      function populateRefillLog() {
+        const tbody = document.getElementById('refill-body');
+        if (!Array.isArray(refillLogData) || refillLogData.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6">No auto-refill records found.</td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = refillLogData.map(row => `
+          <tr>
+            <td>${row.timestamp || '-'}</td>
+            <td>${row.medicine_name || '-'}</td>
+            <td>${Number(row.previous_stock ?? 0)}</td>
+            <td>${Number(row.added_units ?? 0)}</td>
+            <td>${Number(row.new_stock ?? 0)}</td>
+            <td>${row.rule || '-'}</td>
+          </tr>
+        `).join('');
+      }
+
       function populateSales() {
         const tbody = document.getElementById('sales-body');
         tbody.innerHTML = salesData.map(sale => `
           <tr>
             <td>${sale.date}</td>
             <td>${sale.orders}</td>
-            <td>₹${sale.revenue}</td>
-            <td>₹${sale.avgOrder}</td>
+            <td>Rs ${sale.revenue}</td>
+            <td>Rs ${sale.avgOrder}</td>
             <td>${sale.items}</td>
           </tr>
         `).join('');
       }
 
-      // Populate top products
       function populateTopProducts() {
         const tbody = document.getElementById('top-products-body');
         tbody.innerHTML = topProducts.map(product => `
@@ -415,13 +420,12 @@
             <td>${product.rank}</td>
             <td>${product.name}</td>
             <td>${product.units}</td>
-            <td>₹${product.revenue}</td>
-            <td style="color: ${product.trend.includes('↑') ? '#059669' : '#dc2626'}; font-weight: 600;">${product.trend}</td>
+            <td>Rs ${product.revenue}</td>
+            <td style="color: ${product.trend.includes('up') ? '#059669' : '#dc2626'}; font-weight: 600;">${product.trend}</td>
           </tr>
         `).join('');
       }
 
-      // Calculate and update statistics
       function updateStatistics() {
         const totalMedicines = inventoryData.length;
         const lowStock = inventoryData.filter(item => item.stock < 10 && item.stock > 0).length;
@@ -433,24 +437,31 @@
         document.getElementById('out-of-stock').textContent = outOfStock;
       }
 
-      // Initialize dashboard
       async function initDashboard() {
         checkAdminAccess();
-        // Fetch inventory from backend
+
         try {
           const res = await fetch('http://127.0.0.1:8000/inventory');
           inventoryData = await res.json();
         } catch (e) {
           inventoryData = [];
         }
+
+        try {
+          const refillRes = await fetch('http://127.0.0.1:8000/inventory/refill-log');
+          refillLogData = await refillRes.json();
+        } catch (e) {
+          refillLogData = [];
+        }
+
         populateInventory();
+        populateRefillLog();
         populateSales();
         populateTopProducts();
         populateRegisteredUsers();
         updateStatistics();
       }
 
-      // Run on page load
       document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
   </body>

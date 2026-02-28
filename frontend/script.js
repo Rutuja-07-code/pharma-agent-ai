@@ -4,9 +4,12 @@ const newChatBtn = document.querySelector("#new-chat-btn");
 const input = document.querySelector("#chat-input");
 const chat = document.querySelector(".chat");
 const chatHistoryList = document.querySelector("#chat-history-list");
+const submitPrescriptionBtn = document.querySelector("#submit-prescription-btn");
+const prescriptionPhotoInput = document.querySelector("#prescription-photo-input");
 
 const BACKEND_URL = "http://127.0.0.1:8000/chat";
 const INVENTORY_URL = "http://127.0.0.1:8000/inventory";
+const PRESCRIPTION_SUBMIT_URL = "http://127.0.0.1:8000/prescription/submit";
 const PAYMENT_CREATE_URL = "http://127.0.0.1:8000/payment/create";
 const PAYMENT_CONFIRM_URL = "http://127.0.0.1:8000/payment/confirm";
 const CHAT_STORAGE_KEY = "pharma_chat_messages"; // legacy single-thread key
@@ -25,6 +28,14 @@ let activeChatId = null;
 // Attach events only if elements exist
 if (sendBtn) sendBtn.addEventListener("click", sendMessage);
 if (newChatBtn) newChatBtn.addEventListener("click", startNewChat);
+if (submitPrescriptionBtn) {
+  submitPrescriptionBtn.addEventListener("click", () => {
+    prescriptionPhotoInput?.click();
+  });
+}
+if (prescriptionPhotoInput) {
+  prescriptionPhotoInput.addEventListener("change", handlePrescriptionPhotoSelected);
+}
 
 if (input) {
   input.addEventListener("keydown", (e) => {
@@ -275,6 +286,7 @@ function startNewChat() {
   createChatSession([{ className: "ai", text: WELCOME_MESSAGE }]);
   openChatSession(activeChatId);
   if (input) input.value = "";
+  setPrescriptionUploadVisibility(false);
 }
 
 // Clear chat history on login if needed
@@ -291,6 +303,7 @@ if (window.location.pathname.endsWith("chat.html")) {
   }
 }
 restoreChat();
+setPrescriptionUploadVisibility(false);
 
 function showTypingIndicator() {
   if (!chat || typingIndicatorEl) return;
@@ -378,6 +391,70 @@ async function trackPlacedOrderFromReply(replyText) {
 
   orders.push(newOrder);
   localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+}
+
+function setPrescriptionUploadVisibility(isVisible) {
+  if (!submitPrescriptionBtn) return;
+  submitPrescriptionBtn.style.display = isVisible ? "inline-flex" : "none";
+}
+
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePrescriptionPhotoSelected(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    appendMessage("ai", "Please upload an image file for the prescription.");
+    event.target.value = "";
+    return;
+  }
+
+  try {
+    const imageData = await fileToDataURL(file);
+    appendMessage("user", "Add Prescription");
+    appendMessage("ai", "Uploading prescription photo...");
+
+    const res = await fetch(PRESCRIPTION_SUBMIT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_data: imageData,
+        filename: file.name || "prescription.jpg",
+      }),
+    });
+
+    if (!res.ok) {
+      let errText = "Unable to submit prescription.";
+      try {
+        const errJson = await res.json();
+        errText = errJson?.detail || errText;
+      } catch {
+        const raw = await res.text();
+        if (raw) errText = raw;
+      }
+      appendMessage("ai", `Prescription submission failed: ${errText}`);
+      return;
+    }
+
+    const data = await res.json();
+    const replyText = sanitizeAiText(data.reply || "Prescription submitted successfully.");
+    appendMessage("ai", replyText || "Prescription submitted successfully.");
+    setPrescriptionUploadVisibility(false);
+    await trackPlacedOrderFromReply(replyText);
+  } catch (err) {
+    appendMessage("ai", "Could not submit prescription. Please try again.");
+    console.error(err);
+  } finally {
+    event.target.value = "";
+  }
 }
 
 async function startUpiIntentPayment(payment) {
@@ -504,16 +581,8 @@ async function sendMessage(textFromVoice) {
     hideTypingIndicator();
     const replyText = sanitizeAiText(data.reply || "No reply received from backend.");
     appendMessage("ai", replyText || "No reply received from backend.");
-
-    if (data.payment_required && data.payment) {
-      appendMessage(
-        "ai",
-        `Payment needed for ${data.payment.medicine_name} x ${data.payment.quantity}. Completing payment will place your order.`
-      );
-      await startUpiIntentPayment(data.payment);
-    } else {
-      await trackPlacedOrderFromReply(replyText);
-    }
+    setPrescriptionUploadVisibility(Boolean(data.prescription_required));
+    await trackPlacedOrderFromReply(replyText);
   } catch (err) {
     hideTypingIndicator();
     appendMessage(

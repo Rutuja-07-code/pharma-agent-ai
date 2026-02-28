@@ -23,7 +23,7 @@ netstat -ano | findstr ":8000" >nul
 if %errorlevel%==0 (
   echo Pharma app is already running on port 8000.
 ) else (
-  start "Pharma Backend" cmd /k "set UPI_ID=%UPI_ID% && set UPI_PAYEE_NAME=%UPI_PAYEE_NAME% && cd /d "%REPO_DIR%backend\app" && if exist "%REPO_DIR%.venv\Scripts\activate.bat" call "%REPO_DIR%.venv\Scripts\activate.bat" && uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+  start "Pharma Backend" cmd /k "set UPI_ID=%UPI_ID% && set UPI_PAYEE_NAME=%UPI_PAYEE_NAME% && set LANGFUSE_SECRET_KEY=%LANGFUSE_SECRET_KEY% && set LANGFUSE_PUBLIC_KEY=%LANGFUSE_PUBLIC_KEY% && set LANGFUSE_BASE_URL=%LANGFUSE_BASE_URL% && set LANGFUSE_HOST=%LANGFUSE_HOST% && cd /d "%REPO_DIR%backend\app" && if exist "%REPO_DIR%.venv\Scripts\activate.bat" call "%REPO_DIR%.venv\Scripts\activate.bat" && uvicorn main:app --reload --host 127.0.0.1 --port 8000"
   timeout /t 2 >nul
   echo Started backend.
 )
@@ -32,3 +32,4 @@ start "" "%APP_URL%"
 echo Opened %APP_URL%
 
 endlocal
+

@@ -6,6 +6,28 @@ PRICE_FILE = Path(__file__).resolve().parent.parent / "data" / "products-export.
 DEFAULT_PRICE = 9.99
 
 
+def _normalize_text(value):
+    return str(value or "").strip().lower()
+
+
+def _find_match(df, medicine_name):
+    med_norm = _normalize_text(medicine_name)
+    names_norm = df["medicine_name"].astype(str).str.strip().str.lower()
+
+    exact_match = df[names_norm == med_norm]
+    if not exact_match.empty:
+        return exact_match
+
+    return df[
+        df["medicine_name"].astype(str).str.contains(
+            str(medicine_name),
+            case=False,
+            na=False,
+            regex=False,
+        )
+    ]
+
+
 def _load_price_map():
     if not PRICE_FILE.exists():
         return {}
@@ -42,7 +64,7 @@ def quote_order(order):
         return {"ok": False, "reason": "Quantity must be greater than 0."}
 
     df = pd.read_csv(DATA_FILE)
-    match = df[df["medicine_name"].str.contains(med, case=False, na=False)]
+    match = _find_match(df, med)
     if match.empty:
         return {"ok": False, "reason": f"Medicine '{med}' not found in inventory."}
 
@@ -76,12 +98,13 @@ def place_order(order):
 
     # Load fresh inventory for each order request.
     df = pd.read_csv(DATA_FILE)
-    match = df[df["medicine_name"].str.contains(med, case=False)]
+    match = _find_match(df, med)
 
     if match.empty:
         return f"Medicine '{med}' not found in inventory."
 
     idx = match.index[0]
+    med_name = str(df.loc[idx, "medicine_name"]).strip()
     stock = int(df.loc[idx, "stock"])
 
     if stock <= 0:
@@ -98,12 +121,12 @@ def place_order(order):
     df.to_csv(DATA_FILE, index=False)
 
     price_map = _load_price_map()
-    unit_price = _safe_unit_price(price_map.get(str(med).strip().lower(), 0.0))
+    unit_price = _safe_unit_price(price_map.get(med_name.lower(), 0.0))
     total_price = unit_price * qty
 
     return (
         "Order Confirmed!\n"
-        f"Medicine: {med}\n"
+        f"Medicine: {med_name}\n"
         f"Quantity Ordered: {qty}\n"
         f"Unit Price: EUR {unit_price:.2f}\n"
         f"Total Price: EUR {total_price:.2f}\n"
@@ -112,7 +135,7 @@ def place_order(order):
 
 def refill_stock(medicine_name, refill_quantity=105):
     df = pd.read_csv(DATA_FILE)
-    match = df[df["medicine_name"].str.contains(medicine_name, case=False, na=False)]
+    match = _find_match(df, medicine_name)
 
     if match.empty:
         return {"ok": False, "reason": f"Medicine '{medicine_name}' not found in inventory."}

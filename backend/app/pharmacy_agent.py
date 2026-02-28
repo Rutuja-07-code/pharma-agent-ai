@@ -482,10 +482,11 @@ def pharmacy_chatbot(user_message):
 
 from order_extractor import extract_order
 from safety_agent import safety_check
-from order_executor import quote_order
+from order_executor import place_order
 from medicine_matcher import find_medicine_matches
 from medicine_lookup import search_medicine
 import re
+from typing import Optional, Dict, Any
 
 # ================================
 # Pending States (Memory)
@@ -501,6 +502,27 @@ pending_partial_after_rx = False
 pending_partial_order = None
 pending_partial_requires_rx = False
 pending_preorder_offer = None
+pending_prescription_upload: Optional[Dict[str, Any]] = None
+
+
+def get_pending_prescription_context():
+    if pending_prescription_order is None:
+        return None
+
+    return {
+        "medicine_name": str(pending_prescription_order.get("medicine_name", "")).strip(),
+        "quantity": int(pending_final_quantity or pending_prescription_order.get("quantity") or 0),
+    }
+
+
+def set_prescription_upload_verification(upload_record: Dict[str, Any]):
+    global pending_prescription_upload
+    pending_prescription_upload = dict(upload_record or {})
+
+
+def _clear_prescription_upload():
+    global pending_prescription_upload
+    pending_prescription_upload = None
 
 
 def _is_order_intent(message):
@@ -537,21 +559,10 @@ def _is_order_intent(message):
     return bool(words.intersection(order_words) and words.intersection(quantity_units))
 
 
-def _payment_required_response(order, context_message):
-    quoted = quote_order(order)
-    if not quoted.get("ok"):
-        return f"Order cannot proceed: {quoted.get('reason', 'Unable to create payment request.')}"
-
+def _prescription_required_response(context_message):
     return {
-        "type": "payment_required",
+        "type": "prescription_required",
         "message": context_message,
-        "payment": {
-            "medicine_name": quoted["medicine_name"],
-            "quantity": int(quoted["quantity"]),
-            "unit_price": float(quoted["unit_price"]),
-            "total_price": float(quoted["total_price"]),
-            "currency": "INR",
-        },
     }
 
 
@@ -570,6 +581,7 @@ def pharmacy_chatbot(user_message):
     global pending_partial_order
     global pending_partial_requires_rx
     global pending_preorder_offer
+    global pending_prescription_upload
 
     msg = (user_message or "").lower().strip()
     selected_order = None
@@ -625,17 +637,19 @@ def pharmacy_chatbot(user_message):
                 pending_partial_requires_rx = False
                 pending_rx_confirmation = False
                 pending_partial_after_rx = True
+                _clear_prescription_upload()
 
-                return "This medicine requires a prescription. Do you have a prescription? (yes/no)"
+                return _prescription_required_response(
+                    "This medicine requires a prescription.\n"
+                    "Please click 'Add Prescription' and upload a clear photo to continue."
+                )
 
+            confirmation = place_order(order)
             pending_partial_order = None
             pending_partial_requires_rx = False
-            return _payment_required_response(
-                order,
-                (
-                    f"Partial stock confirmed for {order['quantity']} units.\n"
-                    "Proceed to test payment to place this order."
-                ),
+            return (
+                f"Partial stock confirmed for {order['quantity']} units.\n"
+                f"{confirmation}"
             )
 
         if msg in ["no", "n", "cancel", "wait"]:
@@ -651,14 +665,16 @@ def pharmacy_chatbot(user_message):
             order = pending_prescription_order
             order["quantity"] = pending_final_quantity
 
+            confirmation = place_order(order)
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
+            _clear_prescription_upload()
 
-            return _payment_required_response(
-                order,
-                "Prescription and stock confirmed. Proceed to test payment to place your order.",
+            return (
+                "Prescription and stock confirmed.\n"
+                f"{confirmation}"
             )
 
         if msg in ["no", "n", "cancel"]:
@@ -666,6 +682,7 @@ def pharmacy_chatbot(user_message):
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
+            _clear_prescription_upload()
             return "Okay, order cancelled."
 
         return "Please reply 'Yes' to confirm or 'No' to cancel."
@@ -673,6 +690,35 @@ def pharmacy_chatbot(user_message):
     # Step 4: Prescription confirmation handling
     if pending_prescription_order is not None and not pending_rx_confirmation:
         if msg in ["yes", "y", "upload", "done", "upload prescription"]:
+            upload = pending_prescription_upload or {}
+            verified = bool(upload.get("verified"))
+            uploaded_for = str(upload.get("medicine_name_matched") or upload.get("medicine_name_requested") or "").strip().lower()
+            pending_med = str(pending_prescription_order.get("medicine_name", "")).strip().lower()
+
+            if not verified:
+                reason = str(upload.get("verification_reason") or "Medicine name did not match prescription.")
+                pending_prescription_order = None
+                pending_final_quantity = None
+                pending_rx_confirmation = False
+                pending_partial_after_rx = False
+                _clear_prescription_upload()
+                return f"Prescription invalid. Order rejected.\nReason: {reason}"
+
+            names_mismatch = (
+                uploaded_for
+                and pending_med
+                and uploaded_for != pending_med
+                and uploaded_for not in pending_med
+                and pending_med not in uploaded_for
+            )
+            if names_mismatch:
+                pending_prescription_order = None
+                pending_final_quantity = None
+                pending_rx_confirmation = False
+                pending_partial_after_rx = False
+                _clear_prescription_upload()
+                return "Prescription invalid. Order rejected.\nReason: Medicine name does not match prescription."
+
             requested_qty = int(pending_prescription_order.get("quantity", pending_final_quantity or 0))
             final_qty = int(pending_final_quantity or requested_qty)
 
@@ -686,6 +732,7 @@ def pharmacy_chatbot(user_message):
                 pending_final_quantity = None
                 pending_rx_confirmation = False
                 pending_partial_after_rx = False
+                _clear_prescription_upload()
                 if "out of stock" in reason.lower():
                     pending_preorder_offer = {
                         "medicine_name": current_order.get("medicine_name"),
@@ -702,26 +749,27 @@ def pharmacy_chatbot(user_message):
             order = pending_prescription_order
             if latest_decision["status"] == "Partial":
                 order["quantity"] = int(latest_decision["stock"])
+                confirmation = place_order(order)
                 pending_prescription_order = None
                 pending_final_quantity = None
                 pending_rx_confirmation = False
                 pending_partial_after_rx = False
-                return _payment_required_response(
-                    order,
-                    (
-                        f"Only {order['quantity']} units are available (you requested {requested_qty}).\n"
-                        "Proceed to test payment to place the partial order."
-                    ),
+                _clear_prescription_upload()
+                return (
+                    f"Only {order['quantity']} units are available (you requested {requested_qty}).\n"
+                    f"{confirmation}"
                 )
 
             order["quantity"] = final_qty
+            confirmation = place_order(order)
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
-            return _payment_required_response(
-                order,
-                "Prescription verified. Proceed to test payment to place your order.",
+            _clear_prescription_upload()
+            return (
+                "Prescription verified.\n"
+                f"{confirmation}"
             )
 
         if msg in ["no", "n", "cancel"]:
@@ -729,9 +777,18 @@ def pharmacy_chatbot(user_message):
             pending_final_quantity = None
             pending_rx_confirmation = False
             pending_partial_after_rx = False
+            _clear_prescription_upload()
             return "Okay, order cancelled because prescription is required."
 
-        return "Do you have a prescription? (yes/no)"
+        # If user sends a different query/order text, treat it as a fresh intent
+        # instead of forcing the old pending-prescription flow.
+        pending_prescription_order = None
+        pending_final_quantity = None
+        pending_rx_confirmation = False
+        pending_partial_after_rx = False
+        _clear_prescription_upload()
+
+        # Continue to normal handling below for this new message.
 
     # Step 5: Info mode (no order intent)
     if selected_order is None and not _is_order_intent(user_message):
@@ -833,9 +890,11 @@ def pharmacy_chatbot(user_message):
             pending_final_quantity = order["quantity"]
             pending_rx_confirmation = False
             pending_partial_after_rx = False
-            return "Prescription Required. Do you have a prescription? (yes/no)"
+            _clear_prescription_upload()
+            return _prescription_required_response(
+                "Prescription Required.\n"
+                "Please click 'Add Prescription' and upload a clear photo to continue."
+            )
 
-        return _payment_required_response(
-            order,
-            "Stock available. Proceed to test payment to place your order.",
-        )
+        confirmation = place_order(order)
+        return f"Stock available.\n{confirmation}"

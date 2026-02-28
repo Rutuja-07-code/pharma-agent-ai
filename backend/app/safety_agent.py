@@ -4,6 +4,9 @@ import pandas as pd
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
 
+def _normalize_text(value):
+    return str(value or "").strip().lower()
+
 
 def safety_check(order):
     med = order.get("medicine_name")
@@ -17,7 +20,17 @@ def safety_check(order):
 
     # Always read fresh inventory so stock checks are up to date.
     df = pd.read_csv(DATA_FILE)
-    match = df[df["medicine_name"].str.contains(med, case=False, na=False)]
+    med_norm = _normalize_text(med)
+    names_norm = df["medicine_name"].astype(str).str.strip().str.lower()
+
+    # Prefer exact normalized match to avoid false positives from broad substring matches.
+    exact_match = df[names_norm == med_norm]
+    if not exact_match.empty:
+        match = exact_match
+    else:
+        # Substring fallback for slight extractor variations; keep regex disabled.
+        match = df[df["medicine_name"].astype(str).str.contains(str(med), case=False, na=False, regex=False)]
+
     if match.empty:
         return {"status": "Rejected", "reason": "Medicine not found"}
 

@@ -1,0 +1,7 @@
+INFO:     Will watch for changes in these directories: ['c:\\Users\\Ayush\\Documents\\GitHub\\pharma-agent-ai\\backend\\app']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [30116] using StatReload
+Langfuse disabled: LANGFUSE_PUBLIC_KEY and/or LANGFUSE_SECRET_KEY missing.
+INFO:     Started server process [11816]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

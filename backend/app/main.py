@@ -4,16 +4,20 @@ import os
 import re
 from typing import Optional, Any, Dict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langfuse import Langfuse
 from pydantic import BaseModel
 
 
-from pharmacy_agent import pharmacy_chatbot
+from pharmacy_agent import (
+    pharmacy_chatbot,
+    get_pending_prescription_context,
+    set_prescription_upload_verification,
+)
 from inventory_api import router as inventory_router
-from order_executor import place_order
+from prescription_store import save_and_verify_prescription
 
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -38,36 +42,16 @@ class ChatRequest(BaseModel):
 # Response format back to frontend
 class ChatResponse(BaseModel):
     reply: str
-    payment_required: bool = False
-    payment: Optional[Dict[str, Any]] = None
+    prescription_required: bool = False
 
 
-class CreatePaymentRequest(BaseModel):
-    medicine_name: str
-    quantity: int
-    total_price: float
-    currency: str = "INR"
+class PrescriptionSubmitRequest(BaseModel):
+    image_data: str
+    filename: Optional[str] = None
 
 
-class CreatePaymentResponse(BaseModel):
-    provider: str = "upi_intent"
-    amount: int
-    currency: str
-    name: str
-    description: str
-    upi_link: str = ""
-    qr_url: str = ""
-
-
-class ConfirmPaymentRequest(BaseModel):
-    medicine_name: str
-    quantity: int
-    payment_mode: str = "upi_intent"
-    upi_confirmed: bool = False
-
-
-class ConfirmPaymentResponse(BaseModel):
-    placed: bool
+class PrescriptionSubmitResponse(BaseModel):
+    accepted: bool
     reply: str
 
 
@@ -109,17 +93,15 @@ def _sanitize_reply(text: str) -> str:
 
 
 def _resolve_chat_result(result: Any) -> Dict[str, Any]:
-    if isinstance(result, dict) and result.get("type") == "payment_required":
+    if isinstance(result, dict) and result.get("type") == "prescription_required":
         return {
-            "reply": _sanitize_reply(result.get("message", "Payment required to place order.")),
-            "payment_required": True,
-            "payment": result.get("payment"),
+            "reply": _sanitize_reply(result.get("message", "Prescription is required to place this order.")),
+            "prescription_required": True,
         }
 
     return {
         "reply": _sanitize_reply(result),
-        "payment_required": False,
-        "payment": None,
+        "prescription_required": False,
     }
 
 
@@ -145,7 +127,7 @@ def chat(req: ChatRequest):
             langfuse_client.update_current_span(
                 output={
                     "reply": result["reply"],
-                    "payment_required": result["payment_required"],
+                    "prescription_required": result["prescription_required"],
                 }
             )
             return result
@@ -162,64 +144,46 @@ def chat(req: ChatRequest):
         langfuse_client.flush()
 
 
-@app.post("/payment/create", response_model=CreatePaymentResponse)
-def create_payment(req: CreatePaymentRequest):
-    amount = max(1, int(round(float(req.total_price) * 100)))
-    currency = "INR"
-    name = "Medico Pharmacy"
-    description = f"Order for {req.medicine_name} x {req.quantity}"
-
-    # UPI intent mode only (personal UPI ID).
-    personal_upi_id = os.getenv("UPI_ID", "").strip()
-    if not personal_upi_id:
+@app.post("/prescription/submit", response_model=PrescriptionSubmitResponse)
+def submit_prescription(req: PrescriptionSubmitRequest):
+    context = get_pending_prescription_context()
+    if not context or not context.get("medicine_name"):
         raise HTTPException(
-            status_code=500,
-            detail="UPI_ID is not configured. Set UPI_ID (example: yourname@oksbi).",
+            status_code=400,
+            detail="No prescription-required order is pending right now.",
         )
 
-    payee_name = os.getenv("UPI_PAYEE_NAME", "Medico Pharmacy")
-    txn_note = f"Medicine order {req.medicine_name}"
-    txn_ref = f"MED{abs(hash((req.medicine_name, req.quantity, amount))) % 1000000000}"
-    upi_link = (
-        "upi://pay"
-        f"?pa={personal_upi_id}"
-        f"&pn={payee_name}"
-        f"&am={amount/100:.2f}"
-        f"&cu=INR"
-        f"&tn={txn_note}"
-        f"&tr={txn_ref}"
-    )
-    qr_url = (
-        "https://api.qrserver.com/v1/create-qr-code/"
-        f"?size=260x260&data={upi_link}"
-    )
+    try:
+        record = save_and_verify_prescription(
+            image_data=req.image_data,
+            medicine_name=context["medicine_name"],
+            filename=req.filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    return {
-        "provider": "upi_intent",
-        "amount": amount,
-        "currency": currency,
-        "name": name,
-        "description": description,
-        "upi_link": upi_link,
-        "qr_url": qr_url,
-    }
+    set_prescription_upload_verification(record)
 
-
-@app.post("/payment/confirm", response_model=ConfirmPaymentResponse)
-def confirm_payment(req: ConfirmPaymentRequest):
-    if req.payment_mode != "upi_intent":
-        raise HTTPException(status_code=400, detail="Unsupported payment mode.")
-    if not req.upi_confirmed:
-        raise HTTPException(status_code=400, detail="UPI payment not confirmed.")
-
-    confirmation = place_order(
-        {"medicine_name": req.medicine_name, "quantity": int(req.quantity)}
-    )
-    placed = "Order Confirmed!" in str(confirmation)
-    return {"placed": placed, "reply": _sanitize_reply(confirmation)}
+    result = _resolve_chat_result(pharmacy_chatbot("upload prescription"))
+    return {"accepted": bool(record.get("verified")), "reply": result["reply"]}
 
 
 # Serve frontend files from the same FastAPI app so only one server is needed.
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+@app.post("/upload-prescription/")
+async def upload_prescription(image: UploadFile = File(...)):
+    # Lazy import so server can still start even if OCR deps are not installed.
+    try:
+        from orc.orc_service import extract_text_from_image
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR service unavailable: {exc}",
+        )
+
+    file_bytes = await image.read()
+    extracted_text = extract_text_from_image(file_bytes)
+    return {"extracted_text": extracted_text}
