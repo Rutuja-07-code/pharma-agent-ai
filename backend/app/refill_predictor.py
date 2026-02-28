@@ -1,21 +1,17 @@
-# Proactive refill recommendation module
-import pandas as pd
+from datetime import timedelta
+try:
+    from backend.app.dosage_normalizer import normalize_dosage
+except ModuleNotFoundError:
+    from dosage_normalizer import normalize_dosage
 
-history = pd.read_csv("order_history.csv")
+def calculate_refill_date(purchase_date, quantity, dosage_text):
 
-def predict_refills():
-    history["last_purchase_date"] = pd.to_datetime(history["last_purchase_date"])
+    parsed = normalize_dosage(dosage_text)
 
-    history["days_since"] = (
-        pd.Timestamp.today() - history["last_purchase_date"]
-    ).dt.days
+    if parsed["schedule_type"] == "as_needed":
+        return None
 
-    alerts = history[history["days_since"] > 20]
+    daily_dose = max(parsed["daily_dose"], 1)
+    days_supply = quantity / daily_dose
 
-    return alerts[["customer_id", "medicine_name", "days_since"]]
-
-
-if __name__ == "__main__":
-    alerts = predict_refills()
-    print("\n⚠️ Customers Needing Refill Soon:")
-    print(alerts)
+    return purchase_date + timedelta(days=int(days_supply))

@@ -10,6 +10,7 @@ def _load_inventory():
     return df.rename(
         columns={
             "product name": "medicine_name",
+            "prize": "price",
             "stock": "stock",
             "prescription_required": "prescription_required",
         }

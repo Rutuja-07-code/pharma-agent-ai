@@ -480,11 +480,18 @@ def pharmacy_chatbot(user_message):
         return f"✅ Order Confirmed!\n\n{confirmation}"
 """
 
-from order_extractor import extract_order
-from safety_agent import safety_check
-from order_executor import quote_order
-from medicine_matcher import find_medicine_matches
-from medicine_lookup import search_medicine
+try:
+    from backend.app.order_extractor import extract_order
+    from backend.app.safety_agent import safety_check
+    from backend.app.order_executor import place_order, quote_order
+    from backend.app.medicine_matcher import find_medicine_matches
+    from backend.app.medicine_lookup import search_medicine
+except ModuleNotFoundError:
+    from order_extractor import extract_order
+    from safety_agent import safety_check
+    from order_executor import place_order, quote_order
+    from medicine_matcher import find_medicine_matches
+    from medicine_lookup import search_medicine
 import re
 
 # ================================
@@ -553,6 +560,17 @@ def _payment_required_response(order, context_message):
             "currency": "INR",
         },
     }
+
+def _extract_medicine_query(message):
+    msg = (message or "").strip().lower()
+    # Remove common intent filler so lookup uses medicine phrase.
+    msg = re.sub(
+        r"\b(i need|need|i want|want|show me|tell me about|do you have|check|search|for)\b",
+        " ",
+        msg,
+    )
+    msg = re.sub(r"\s+", " ", msg).strip()
+    return msg or (message or "").strip()
 
 
 # ================================
@@ -735,9 +753,16 @@ def pharmacy_chatbot(user_message):
 
     # Step 5: Info mode (no order intent)
     if selected_order is None and not _is_order_intent(user_message):
-        lookup = search_medicine(user_message)
+        lookup_query = _extract_medicine_query(user_message)
+        lookup = search_medicine(lookup_query)
         if lookup.get("status") != "Found":
-            return lookup.get("message", "Medicine not available in our inventory.")
+            # Fallback: if sentence lookup still fails, attempt order extraction and lookup by medicine name.
+            extracted = extract_order(user_message)
+            med_name = extracted.get("medicine_name") if isinstance(extracted, dict) else None
+            if med_name:
+                lookup = search_medicine(med_name)
+            if lookup.get("status") != "Found":
+                return f"❌ {lookup.get('message', 'Medicine not available in our inventory.')}"
 
         rows = lookup.get("results", [])
         lines = []

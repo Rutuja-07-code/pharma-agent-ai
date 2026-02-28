@@ -10,10 +10,25 @@ from fastapi.staticfiles import StaticFiles
 from langfuse import Langfuse
 from pydantic import BaseModel
 
+try:
+    from backend.app.pharmacy_agent import pharmacy_chatbot
+except ModuleNotFoundError:
+    from pharmacy_agent import pharmacy_chatbot
 
-from pharmacy_agent import pharmacy_chatbot
-from inventory_api import router as inventory_router
-from order_executor import place_order
+try:
+    from backend.app.inventory_api import router as inventory_router
+except ModuleNotFoundError:
+    from inventory_api import router as inventory_router
+
+try:
+    from backend.app.order_executor import place_order
+except ModuleNotFoundError:
+    from order_executor import place_order
+
+try:
+    from backend.app.admin_reminder_service import preview_admin_reminders, send_admin_reminders
+except ModuleNotFoundError:
+    from admin_reminder_service import preview_admin_reminders, send_admin_reminders
 
 app = FastAPI(title="Agentic AI Pharmacy System")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -69,6 +84,13 @@ class ConfirmPaymentRequest(BaseModel):
 class ConfirmPaymentResponse(BaseModel):
     placed: bool
     reply: str
+
+
+class AdminReminderRequest(BaseModel):
+    admin_name: str
+    admin_contact: str
+    max_overdue_days: int = 9999
+    dry_run: bool = True
 
 
 def _init_langfuse() -> Optional[Langfuse]:
@@ -223,3 +245,76 @@ def confirm_payment(req: ConfirmPaymentRequest):
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+try:
+    from backend.app.refill_engine import get_due_refills
+except ModuleNotFoundError:
+    from refill_engine import get_due_refills
+
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+except ModuleNotFoundError:
+    BackgroundScheduler = None
+
+REFILL_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "Consumer Order History 1.xlsx"
+CONTACT_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "patient_contacts.csv"
+scheduler = None
+
+
+@app.get("/admin/due-refills")
+def show_due_refills():
+    due_df = get_due_refills(str(REFILL_FILE_PATH))
+
+    return due_df[[
+        "patient_id",
+        "product_name",
+        "next_refill_date"
+    ]].to_dict(orient="records")
+
+
+@app.get("/admin/reminders/preview")
+def admin_preview_reminders(max_overdue_days: int = 9999):
+    return preview_admin_reminders(
+        history_file=str(REFILL_FILE_PATH),
+        contact_file=str(CONTACT_FILE_PATH),
+        max_overdue_days=max_overdue_days,
+    )
+
+
+@app.post("/admin/reminders/send")
+def admin_send_reminders(req: AdminReminderRequest):
+    return send_admin_reminders(
+        history_file=str(REFILL_FILE_PATH),
+        contact_file=str(CONTACT_FILE_PATH),
+        admin_name=req.admin_name,
+        admin_contact=req.admin_contact,
+        max_overdue_days=req.max_overdue_days,
+        dry_run=req.dry_run,
+    )
+
+
+def _run_due_refill_job():
+    due_df = get_due_refills(str(REFILL_FILE_PATH))
+    logger.info("Due refill scheduler job completed. rows=%s", len(due_df))
+
+
+@app.on_event("startup")
+def start_scheduler():
+    global scheduler
+    if BackgroundScheduler is None:
+        logger.warning("APScheduler not installed. Skipping due-refill scheduler startup.")
+        return
+    if scheduler is None:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(_run_due_refill_job, "interval", hours=24, id="due_refill_job", replace_existing=True)
+        scheduler.start()
+        logger.info("Due-refill scheduler started (every 24 hours).")
+
+
+@app.on_event("shutdown")
+def stop_scheduler():
+    global scheduler
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+        scheduler = None
+        logger.info("Due-refill scheduler stopped.")
