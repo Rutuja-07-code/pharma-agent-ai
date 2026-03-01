@@ -55,8 +55,30 @@
     <footer class="site-footer"><div class="page-inner">© Medico</div></footer>
 
     <script>
+      function getBackendBase() {
+        const configured = String(localStorage.getItem('PHARMA_API_BASE') || '').replace(/\/+$/, '');
+        if (configured) return configured;
+        if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
+          return String(window.location.origin || '').replace(/\/+$/, '');
+        }
+        return 'http://127.0.0.1:8000';
+      }
+
+      async function syncContactToBackend(username, phone) {
+        const base = getBackendBase();
+        try {
+          await fetch(`${base}/users/contact/upsert`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, phone, days_supply: 30 }),
+          });
+        } catch {
+          // Keep signup flow functional even if backend is offline.
+        }
+      }
+
       // simple client-side signup: validate and store users in localStorage
-      document.getElementById('signup-form').addEventListener('submit', function(e){
+      document.getElementById('signup-form').addEventListener('submit', async function(e){
         e.preventDefault();
         const f = e.target;
         const username = f.username.value.trim();
@@ -81,6 +103,7 @@
         localStorage.setItem('pharma_logged_in', 'true');
         localStorage.setItem('pharma_username', username);
         localStorage.setItem('pharma_clear_chat', 'true');
+        await syncContactToBackend(username, phone);
         window.location.href = 'dashboard.html';
       });
     </script>

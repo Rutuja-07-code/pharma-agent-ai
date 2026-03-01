@@ -59,6 +59,17 @@ const CHAT_SESSIONS_STORAGE_KEY = "pharma_chat_sessions";
 const ACTIVE_CHAT_ID_STORAGE_KEY = "pharma_active_chat_id";
 const ORDERS_STORAGE_KEY = "pharma_orders";
 
+function getCurrentUserPhone() {
+  try {
+    const raw = localStorage.getItem("cureos_user");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return String(parsed?.phone || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 const WELCOME_MESSAGE =
   "Welcome to the Medico AI Pharmacist. How may I assist you with your medication or health-related queries today?";
 
@@ -445,6 +456,23 @@ async function trackPlacedOrderFromReply(replyText) {
 
   orders.push(newOrder);
   localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+
+  const phone = getCurrentUserPhone();
+  if (phone) {
+    try {
+      await fetchWithBackendFallback("/users/order-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          phone,
+          quantity: parsed.quantity,
+        }),
+      });
+    } catch {
+      // Order tracking in UI should continue even if backend sync fails.
+    }
+  }
 }
 
 function setPrescriptionUploadVisibility(isVisible) {

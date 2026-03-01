@@ -2,6 +2,8 @@ from pathlib import Path
 import logging
 import os
 import re
+import csv
+from datetime import date
 from typing import Optional, Any, Dict
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Response
@@ -147,6 +149,85 @@ class AdminReminderRequest(BaseModel):
     admin_contact: str
     max_overdue_days: int = 9999
     dry_run: bool = True
+
+
+class UserContactUpsertRequest(BaseModel):
+    username: str
+    phone: str
+    days_supply: int = 30
+
+
+class UserOrderEventRequest(BaseModel):
+    username: str
+    phone: str
+    quantity: int = 0
+    days_supply: Optional[int] = None
+
+
+def _normalize_phone(raw_phone: str) -> str:
+    value = str(raw_phone or "").strip()
+    if not value:
+        return ""
+    if value.startswith("+"):
+        digits = re.sub(r"\D", "", value[1:])
+        return f"+{digits}" if digits else ""
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 10:
+        return f"+91{digits}"
+    return f"+{digits}" if digits else ""
+
+
+def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Dict[str, str]:
+    contact_path = CONTACT_FILE_PATH
+    contact_path.parent.mkdir(parents=True, exist_ok=True)
+
+    normalized_phone = _normalize_phone(phone)
+    if not patient_id or not normalized_phone:
+        raise ValueError("username and phone are required.")
+
+    safe_days_supply = max(1, min(int(days_supply or 30), 365))
+    today = date.today().isoformat()
+    fieldnames = ["patient_id", "email", "phone", "whatsapp", "last_purchase_date", "days_supply"]
+    rows = []
+    found = False
+
+    if contact_path.exists():
+        with contact_path.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                clean_row = {k: (row.get(k, "") if k is not None else "") for k in fieldnames}
+                if str(clean_row.get("patient_id", "")).strip().lower() == patient_id.lower():
+                    clean_row["patient_id"] = patient_id
+                    clean_row["phone"] = normalized_phone
+                    clean_row["whatsapp"] = normalized_phone
+                    clean_row["last_purchase_date"] = today
+                    clean_row["days_supply"] = str(safe_days_supply)
+                    found = True
+                rows.append(clean_row)
+
+    if not found:
+        rows.append(
+            {
+                "patient_id": patient_id,
+                "email": "",
+                "phone": normalized_phone,
+                "whatsapp": normalized_phone,
+                "last_purchase_date": today,
+                "days_supply": str(safe_days_supply),
+            }
+        )
+
+    with contact_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return {
+        "patient_id": patient_id,
+        "phone": normalized_phone,
+        "last_purchase_date": today,
+        "days_supply": str(safe_days_supply),
+    }
 
 
 def _init_langfuse() -> Optional[Langfuse]:
@@ -490,6 +571,37 @@ def login_user(req: UserLoginRequest):
     except Exception as e:
         logger.exception(f"Login failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/users/contact/upsert")
+def upsert_user_contact(req: UserContactUpsertRequest):
+    patient_id = str(req.username or "").strip()
+    phone = str(req.phone or "").strip()
+    if not patient_id or not phone:
+        raise HTTPException(status_code=400, detail="username and phone are required.")
+    try:
+        row = _upsert_patient_contact(patient_id=patient_id, phone=phone, days_supply=req.days_supply)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "contact": row}
+
+
+@app.post("/users/order-event")
+def user_order_event(req: UserOrderEventRequest):
+    patient_id = str(req.username or "").strip()
+    phone = str(req.phone or "").strip()
+    if not patient_id or not phone:
+        raise HTTPException(status_code=400, detail="username and phone are required.")
+
+    if req.days_supply is not None:
+        days_supply = req.days_supply
+    else:
+        qty = max(0, int(req.quantity or 0))
+        days_supply = qty if qty > 0 else 30
+
+    try:
+        row = _upsert_patient_contact(patient_id=patient_id, phone=phone, days_supply=days_supply)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "contact": row}
 
 
 @app.post("/webhooks/whatsapp")
