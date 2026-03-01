@@ -61,6 +61,56 @@
         margin-bottom: 28px;
       }
 
+      .wa-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .wa-form .full {
+        grid-column: 1 / -1;
+      }
+
+      .wa-form input,
+      .wa-form textarea {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font: inherit;
+      }
+
+      .wa-form textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      .wa-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .wa-send-btn {
+        background: #16a085;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      .wa-send-btn:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .wa-status {
+        font-size: 0.92rem;
+        color: #334155;
+      }
+
       .section-title {
         font-size: 18px;
         font-weight: 600;
@@ -285,6 +335,21 @@
         </section>
 
         <section class="admin-section">
+          <h2 class="section-title">Send WhatsApp Message</h2>
+          <div class="table-container" style="padding: 16px;">
+            <div class="wa-form">
+              <input id="wa-username" type="text" placeholder="Username (optional)" />
+              <input id="wa-phone" type="text" placeholder="Phone (optional, e.g. +919999999999)" />
+              <textarea id="wa-message" class="full" placeholder="Type message to send on WhatsApp..."></textarea>
+              <div class="wa-actions full">
+                <button id="wa-send-btn" class="wa-send-btn" type="button" onclick="sendWhatsAppToUser()">Send WhatsApp</button>
+                <span id="wa-status" class="wa-status"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-section">
           <h2 class="section-title">User Order History</h2>
           <div class="table-container">
             <table>
@@ -451,10 +516,58 @@
         document.getElementById('out-of-stock').textContent = outOfStock;
       }
 
+      function getApiBase() {
+        return (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
+      }
+
+      async function sendWhatsAppToUser() {
+        const username = (document.getElementById('wa-username')?.value || '').trim();
+        const phone = (document.getElementById('wa-phone')?.value || '').trim();
+        const message = (document.getElementById('wa-message')?.value || '').trim();
+        const btn = document.getElementById('wa-send-btn');
+        const statusEl = document.getElementById('wa-status');
+
+        if (!message) {
+          statusEl.textContent = 'Please enter a message.';
+          return;
+        }
+        if (!username && !phone) {
+          statusEl.textContent = 'Enter username or phone.';
+          return;
+        }
+
+        statusEl.textContent = 'Sending...';
+        btn.disabled = true;
+        try {
+          const res = await fetch(`${getApiBase()}/admin/whatsapp/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username || null, phone: phone || null, message }),
+          });
+
+          if (!res.ok) {
+            let err = `HTTP ${res.status}`;
+            try {
+              const payload = await res.json();
+              err = payload?.detail || err;
+            } catch {}
+            statusEl.textContent = `Failed: ${err}`;
+            return;
+          }
+
+          const data = await res.json();
+          statusEl.textContent = `Sent to ${data.to}`;
+          document.getElementById('wa-message').value = '';
+        } catch (e) {
+          statusEl.textContent = 'Failed: cannot reach backend.';
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
       async function fetchSalesData() {
         try {
-          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
-          const res = await fetch(`${base}/admin/sales-overview`);
+          const res = await fetch(`${getApiBase()}/admin/sales-overview`);
           salesData = await res.json();
           populateSales();
         } catch (e) {
@@ -464,8 +577,7 @@
 
       async function fetchTopProducts() {
         try {
-          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
-          const res = await fetch(`${base}/admin/top-products`);
+          const res = await fetch(`${getApiBase()}/admin/top-products`);
           topProducts = await res.json();
           populateTopProducts();
         } catch (e) {
@@ -475,8 +587,7 @@
 
       async function fetchUserOrders() {
         try {
-          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
-          const res = await fetch(`${base}/admin/user-orders`);
+          const res = await fetch(`${getApiBase()}/admin/user-orders`);
           if (!res.ok) {
             console.error('Failed to fetch user orders:', res.status, res.statusText);
             return;
@@ -495,10 +606,22 @@
           tbody.innerHTML = '<tr><td colspan="5">No orders found</td></tr>';
           return;
         }
+        const formatPhone = (order) => {
+          const value = String(
+            order.phone ||
+            order.phone_y ||
+            order.phone_x ||
+            ''
+          ).trim();
+          if (!value || value.toLowerCase() === 'nan' || value.toLowerCase() === 'none') {
+            return '-';
+          }
+          return value;
+        };
         tbody.innerHTML = userOrders.map(order => `
           <tr>
             <td>${order.patient_id || '-'}</td>
-            <td>${order.phone || '-'}</td>
+            <td>${formatPhone(order)}</td>
             <td>${order.product_name || '-'}</td>
             <td>${order.purchase_date || '-'}</td>
             <td>${order.quantity || 0}</td>
@@ -510,10 +633,7 @@
         checkAdminAccess();
 
         try {
-          const base =
-            (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") ||
-            "http://127.0.0.1:8000";
-          const res = await fetch(`${base}/inventory`);
+          const res = await fetch(`${getApiBase()}/inventory`);
           inventoryData = await res.json();
         } catch (e) {
           inventoryData = [];

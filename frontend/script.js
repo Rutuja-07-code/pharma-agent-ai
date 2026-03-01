@@ -429,7 +429,7 @@ function extractConfirmedOrder(replyText) {
   };
 }
 
-async function trackPlacedOrderFromReply(replyText) {
+async function trackPlacedOrderFromReply(replyText, contextMessage = "") {
   const parsed = extractConfirmedOrder(replyText);
   if (!parsed) return;
 
@@ -456,6 +456,7 @@ async function trackPlacedOrderFromReply(replyText) {
 
   orders.push(newOrder);
   localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+  await persistOrderToBackend(newOrder, contextMessage);
 
   const phone = getCurrentUserPhone();
   if (phone) {
@@ -472,6 +473,69 @@ async function trackPlacedOrderFromReply(replyText) {
     } catch {
       // Order tracking in UI should continue even if backend sync fails.
     }
+  }
+}
+
+function inferDosageFrequencyFromText(text) {
+  const msg = String(text || "").toLowerCase();
+  if (!msg) return "once daily";
+  if (/\b(as needed|if needed|prn|sos)\b/.test(msg)) return "as needed";
+  if (/\b(twice daily|2x daily|bid|bd)\b/.test(msg)) return "twice daily";
+  if (/\b(thrice daily|three times daily|3x daily|tid|tds)\b/.test(msg)) return "three times daily";
+  if (/\b(four times daily|4x daily|qid)\b/.test(msg)) return "four times daily";
+  if (/\bevery\s*12\s*hours?\b/.test(msg)) return "every 12 hours";
+  if (/\bevery\s*8\s*hours?\b/.test(msg)) return "every 8 hours";
+  if (/\bevery\s*6\s*hours?\b/.test(msg)) return "every 6 hours";
+  return "once daily";
+}
+
+function getLastUserMessageText() {
+  if (!chat) return "";
+  const userBubbles = Array.from(chat.querySelectorAll(".bubble.user .user-text"));
+  if (!userBubbles.length) return "";
+  return String(userBubbles[userBubbles.length - 1].innerText || "").trim();
+}
+
+async function persistOrderToBackend(orderRecord, contextMessage = "") {
+  if (!orderRecord) return;
+  const userRaw = localStorage.getItem("cureos_user");
+  let username = localStorage.getItem("pharma_username") || "GUEST";
+  let phone = getCurrentUserPhone();
+  try {
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      username = parsed?.username || username;
+      phone = parsed?.phone || phone;
+    }
+  } catch {
+    // Use fallback values.
+  }
+
+  if (!phone) return;
+
+  const dosage_frequency = inferDosageFrequencyFromText(contextMessage || getLastUserMessageText());
+  const payload = {
+    patient_id: username,
+    username,
+    phone,
+    medicine_name: orderRecord.medicine_name,
+    quantity: Number(orderRecord.quantity || 0),
+    dosage_frequency,
+    ordered_at: new Date().toISOString(),
+    unit_price: Number(orderRecord.unit_price || 0),
+    total_price: Number(orderRecord.total_price || 0),
+    status: "Placed",
+    source: "chat-confirmation",
+  };
+
+  try {
+    await fetchWithBackendFallback("/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Keep local order history as fallback even if backend write fails.
   }
 }
 
@@ -637,8 +701,10 @@ async function startUpiIntentPayment(payment) {
 }
 
 async function sendMessage(textFromVoice) {
-  const message = textFromVoice || input?.value.trim();
-  if (!message) return;
+  const rawMessage =
+    typeof textFromVoice === "string" ? textFromVoice : input?.value ?? "";
+  const message = String(rawMessage).trim();
+  const hasVisibleMessage = message.length > 0;
 
   const username = localStorage.getItem("pharma_username") || "GUEST";
   const userData = JSON.parse(localStorage.getItem("cureos_user") || '{}');
@@ -653,7 +719,9 @@ async function sendMessage(textFromVoice) {
     }
   }
 
-  appendMessage("user", message);
+  if (hasVisibleMessage) {
+    appendMessage("user", message);
+  }
 
   if (input) input.value = "";
   if (sendBtn) sendBtn.disabled = true;
@@ -665,7 +733,12 @@ async function sendMessage(textFromVoice) {
     const res = await fetchWithBackendFallback("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, user_id: username, phone: phone }),
+      body: JSON.stringify({
+        message: hasVisibleMessage ? message : "",
+        user_id: username,
+        phone: phone,
+        chat_id: activeChatId || null,
+      }),
     });
 
     if (!res.ok) {
@@ -679,7 +752,7 @@ async function sendMessage(textFromVoice) {
     const replyText = sanitizeAiText(data.reply || "No reply received from backend.");
     appendMessage("ai", replyText || "No reply received from backend.");
     setPrescriptionUploadVisibility(Boolean(data.prescription_required));
-    await trackPlacedOrderFromReply(replyText);
+    await trackPlacedOrderFromReply(replyText, message);
   } catch (err) {
     hideTypingIndicator();
     appendMessage(

@@ -193,6 +193,8 @@ except ModuleNotFoundError:
     from medicine_matcher import find_medicine_matches
     from medicine_lookup import search_medicine
 import re
+import os
+import requests
 from typing import Optional, Dict, Any, Callable
 
 # ================================
@@ -210,6 +212,11 @@ pending_partial_order = None
 pending_partial_requires_rx = False
 pending_preorder_offer = None
 pending_prescription_upload: Optional[Dict[str, Any]] = None
+conversation_context: Dict[str, Dict[str, Any]] = {}
+OLLAMA_CHAT_URL = os.getenv("OLLAMA_CHAT_URL", "http://localhost:11434/api/chat")
+OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL") or os.getenv("OLLAMA_MODEL") or "phi"
+OLLAMA_CHAT_STYLE = os.getenv("OLLAMA_CHAT_STYLE", "friendly")
+MAX_FRIENDLY_REPLY_CHARS = 280
 
 
 def get_pending_prescription_context():
@@ -282,6 +289,154 @@ def _extract_medicine_query(message):
     )
     msg = re.sub(r"\s+", " ", msg).strip()
     return msg or (message or "").strip()
+
+
+def _is_medicine_lookup_intent(message: str) -> bool:
+    msg = str(message or "").strip().lower()
+    if not msg:
+        return False
+
+    lookup_keywords = {
+        "medicine",
+        "medicines",
+        "stock",
+        "available",
+        "availability",
+        "price",
+        "cost",
+        "dosage",
+        "tablet",
+        "tablets",
+        "capsule",
+        "capsules",
+        "syrup",
+        "ml",
+        "mg",
+    }
+    words = set(re.findall(r"[a-zA-Z]+", msg))
+    return bool(words.intersection(lookup_keywords))
+
+
+def _friendly_chat_reply(user_message: str) -> Optional[str]:
+    system_prompt = (
+        f"You are Medico, a {OLLAMA_CHAT_STYLE} and helpful AI pharmacy assistant. "
+        "Write in simple, human language. Keep a warm tone, never robotic. "
+        "Keep every answer concise: maximum 2 short sentences. "
+        "Do not generate stories, puzzles, role-play, or long explanations. "
+        "For health questions, be careful and practical. If risk is high, suggest seeing a doctor. "
+        "Ask one short follow-up question when details are missing. "
+        "If the user message is empty, respond gently and invite them to ask anything about "
+        "medicines, symptoms, refills, or placing orders. "
+        "Do not output JSON unless explicitly requested."
+    )
+
+    content = str(user_message or "").strip()
+    if not content:
+        content = "(empty input)"
+
+    try:
+        response = requests.post(
+            OLLAMA_CHAT_URL,
+            json={
+                "model": OLLAMA_CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content},
+                ],
+                "stream": False,
+                "options": {"temperature": 0.3, "num_predict": 90},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        text = str(payload.get("message", {}).get("content", "")).strip()
+        if not text:
+            return None
+
+        # Hard guardrail: keep output short even if model ignores instructions.
+        text = re.sub(r"\s+", " ", text).strip()
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        text = " ".join(sentences[:2]).strip()
+        if len(text) > MAX_FRIENDLY_REPLY_CHARS:
+            text = text[:MAX_FRIENDLY_REPLY_CHARS].rstrip(" ,;:-") + "."
+        return text
+    except requests.RequestException:
+        return None
+
+
+def _resolve_context_key(chat_id: Optional[str], user_id: Optional[str], phone: Optional[str]) -> str:
+    if chat_id:
+        return f"chat:{str(chat_id).strip()}"
+    if phone:
+        return f"phone:{str(phone).strip()}"
+    if user_id:
+        return f"user:{str(user_id).strip()}"
+    return "global"
+
+
+def _get_context_bucket(context_key: str) -> Dict[str, Any]:
+    bucket = conversation_context.get(context_key)
+    if not isinstance(bucket, dict):
+        bucket = {}
+        conversation_context[context_key] = bucket
+    return bucket
+
+
+def _extract_quantity_and_unit_from_message(message: str, fallback_unit: str = "strip") -> Dict[str, Any]:
+    msg = str(message or "").lower()
+    qty_match = re.search(r"\b(\d+)\b", msg)
+    quantity = int(qty_match.group(1)) if qty_match else None
+
+    unit_aliases = {
+        "strip": "strip",
+        "strips": "strip",
+        "tablet": "tablet",
+        "tablets": "tablet",
+        "capsule": "capsule",
+        "capsules": "capsule",
+        "bottle": "bottle",
+        "bottles": "bottle",
+        "pack": "pack",
+        "packs": "pack",
+        "unit": "unit",
+        "units": "unit",
+    }
+    words = re.findall(r"[a-zA-Z]+", msg)
+    unit = next((unit_aliases[w] for w in words if w in unit_aliases), None)
+
+    return {
+        "quantity": quantity,
+        "unit": unit or fallback_unit or "strip",
+    }
+
+
+def _looks_like_followup_quantity_message(message: str) -> bool:
+    msg = str(message or "").strip().lower()
+    if not msg:
+        return False
+    if not re.search(r"\b\d+\b", msg):
+        return False
+    words = re.findall(r"[a-zA-Z]+", msg)
+    if len(words) <= 4:
+        return True
+    followup_terms = {"need", "want", "order", "buy", "refill", "take", "require"}
+    return bool(set(words).intersection(followup_terms))
+
+
+def _is_no_prescription_message(message: str) -> bool:
+    msg = str(message or "").strip().lower()
+    if not msg:
+        return False
+    no_terms = [
+        "don't have prescription",
+        "dont have prescription",
+        "do not have prescription",
+        "no prescription",
+        "without prescription",
+        "no rx",
+    ]
+    return any(term in msg for term in no_terms)
 
 
 AgentTracer = Optional[Callable[[str, Dict[str, Any], Dict[str, Any], str], None]]
@@ -373,7 +528,13 @@ def _execute_order_with_agent_traces(
 # ================================
 # Main Chatbot Function
 # ================================
-def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[str] = None, phone: Optional[str] = None):
+def pharmacy_chatbot(
+    user_message,
+    trace: AgentTracer = None,
+    user_id: Optional[str] = None,
+    phone: Optional[str] = None,
+    chat_id: Optional[str] = None,
+):
     global pending_medicine_choice
     global pending_order_data
 
@@ -389,6 +550,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
 
     msg = (user_message or "").lower().strip()
     selected_order = None
+    context_key = _resolve_context_key(chat_id=chat_id, user_id=user_id, phone=phone)
+    context = _get_context_bucket(context_key)
 
     # Step 0: Out-of-stock pre-order confirmation
     if pending_preorder_offer is not None:
@@ -427,6 +590,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
         pending_medicine_choice = None
         selected_order = pending_order_data
         pending_order_data = None
+        context["last_medicine_name"] = selected_name
+        context["last_unit"] = str(selected_order.get("unit") or context.get("last_unit") or "strip")
         _trace_agent(
             trace,
             "Intent Agent",
@@ -505,6 +670,17 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
 
     # Step 4: Prescription confirmation handling
     if pending_prescription_order is not None and not pending_rx_confirmation:
+        if _is_no_prescription_message(msg):
+            pending_prescription_order = None
+            pending_final_quantity = None
+            pending_rx_confirmation = False
+            pending_partial_after_rx = False
+            _clear_prescription_upload()
+            return (
+                "Understood. I cannot place this order without a valid prescription. "
+                "You can upload one later or choose a non-prescription medicine."
+            )
+
         if msg in ["yes", "y", "upload", "done", "upload prescription"]:
             upload = pending_prescription_upload or {}
             verified = bool(upload.get("verified"))
@@ -636,30 +812,93 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
 
     # Step 5: Info mode (no order intent)
     if selected_order is None and not _is_order_intent(user_message):
-        lookup_query = _extract_medicine_query(user_message)
-        lookup = search_medicine(lookup_query)
-        if lookup.get("status") != "Found":
-            # Fallback: if sentence lookup still fails, attempt order extraction and lookup by medicine name.
-            extracted = extract_order(user_message)
-            med_name = extracted.get("medicine_name") if isinstance(extracted, dict) else None
-            if med_name:
-                lookup = search_medicine(med_name)
-            if lookup.get("status") != "Found":
-                return f"❌ {lookup.get('message', 'Medicine not available in our inventory.')}"
+        normalized_message = str(user_message or "").strip()
 
-        rows = lookup.get("results", [])
-        lines = []
-        for row in rows:
-            name = row.get("medicine_name", "Unknown")
-            stock = row.get("stock", "NA")
-            rx = row.get("prescription_required", "NA")
-            lines.append(f"- {name} | Stock: {stock} | Prescription: {rx}")
-        return "Medicine Info:\n" + "\n".join(lines)
+        if not normalized_message:
+            reply = _friendly_chat_reply(normalized_message)
+            if reply:
+                _trace_agent(
+                    trace,
+                    "Conversation Agent",
+                    input_payload={"user_message": user_message},
+                    output_payload={"reply": reply},
+                )
+                return reply
+            return "I am here with you. Ask me anything about medicines, refills, or your health concerns."
+
+        lookup = None
+        should_try_lookup = (
+            _is_medicine_lookup_intent(normalized_message)
+            or len(re.findall(r"[a-zA-Z]+", normalized_message)) <= 4
+        )
+        if should_try_lookup:
+            lookup_query = _extract_medicine_query(normalized_message)
+            lookup = search_medicine(lookup_query)
+            if lookup.get("status") != "Found":
+                # Fallback: if sentence lookup still fails, attempt order extraction and lookup by medicine name.
+                extracted = extract_order(normalized_message)
+                med_name = extracted.get("medicine_name") if isinstance(extracted, dict) else None
+                if med_name:
+                    lookup = search_medicine(med_name)
+                if lookup.get("status") == "Found":
+                    _trace_agent(
+                        trace,
+                        "Inventory Agent",
+                        input_payload={"query": lookup_query},
+                        output_payload={"status": "Found"},
+                    )
+
+        if lookup and lookup.get("status") == "Found":
+            rows = lookup.get("results", [])
+            first_name = str(rows[0].get("medicine_name", "")).strip() if rows else ""
+            if first_name:
+                context["last_medicine_name"] = first_name
+            lines = []
+            for row in rows:
+                name = row.get("medicine_name", "Unknown")
+                stock = row.get("stock", "NA")
+                rx = row.get("prescription_required", "NA")
+                lines.append(f"- {name} | Stock: {stock} | Prescription: {rx}")
+            return "Medicine Info:\n" + "\n".join(lines)
+
+        reply = _friendly_chat_reply(normalized_message)
+        if reply:
+            _trace_agent(
+                trace,
+                "Conversation Agent",
+                input_payload={"user_message": user_message},
+                output_payload={"reply": reply},
+            )
+            return reply
+
+        return "I can help with medicine information, symptoms, safe usage, and refills. Tell me what you need."
 
     # Step 6: Extract order (LLM)
     if selected_order is None:
-        order = extract_order(user_message)
+        if context.get("last_medicine_name") and _looks_like_followup_quantity_message(user_message):
+            parsed = _extract_quantity_and_unit_from_message(
+                user_message,
+                fallback_unit=str(context.get("last_unit") or "strip"),
+            )
+            if parsed["quantity"] is not None and parsed["quantity"] > 0:
+                order = {
+                    "medicine_name": str(context.get("last_medicine_name")),
+                    "quantity": int(parsed["quantity"]),
+                    "unit": str(parsed["unit"]),
+                }
+                _trace_agent(
+                    trace,
+                    "Intent Agent",
+                    input_payload={"user_message": user_message, "context_used": True},
+                    output_payload=dict(order),
+                )
+            else:
+                order = extract_order(user_message)
+        else:
+            order = extract_order(user_message)
         if "error" not in order:
+            context["last_medicine_name"] = str(order.get("medicine_name", "")).strip()
+            context["last_unit"] = str(order.get("unit") or context.get("last_unit") or "strip")
             _trace_agent(
                 trace,
                 "Intent Agent",
@@ -674,14 +913,41 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
         if "error" in order:
             err = order.get("error")
             raw = order.get("raw_output")
-            if err and "LLM service unavailable" in err:
-                return (
-                    "Sorry, our order extraction service is temporarily unavailable. "
-                    "Please try again later or contact support if the problem persists."
+
+            can_use_context_medicine = bool(context.get("last_medicine_name"))
+            missing_medicine_err = "medicine_name" in str(err or "").lower()
+            if can_use_context_medicine and missing_medicine_err:
+                parsed = _extract_quantity_and_unit_from_message(
+                    user_message,
+                    fallback_unit=str(context.get("last_unit") or "strip"),
                 )
-            if raw:
-                return f"Could not understand your request.\nError: {err}\nRaw Output: {raw}"
-            return f"Could not understand your request.\nError: {err}"
+                if parsed["quantity"] is not None and parsed["quantity"] > 0:
+                    order = {
+                        "medicine_name": str(context.get("last_medicine_name")),
+                        "quantity": int(parsed["quantity"]),
+                        "unit": str(parsed["unit"]),
+                    }
+                    _trace_agent(
+                        trace,
+                        "Intent Agent",
+                        input_payload={"user_message": user_message, "context_used": True},
+                        output_payload=dict(order),
+                    )
+                else:
+                    return (
+                        f"I understood you mean {context.get('last_medicine_name')}, "
+                        "but I still need quantity (for example: 4 tablets)."
+                    )
+
+            if "error" in order:
+                if err and "LLM service unavailable" in err:
+                    return (
+                        "Sorry, our order extraction service is temporarily unavailable. "
+                        "Please try again later or contact support if the problem persists."
+                    )
+                if raw:
+                    return f"Could not understand your request.\nError: {err}\nRaw Output: {raw}"
+                return f"Could not understand your request.\nError: {err}"
 
         required_fields = {"medicine_name", "quantity", "unit"}
         if not required_fields.issubset(order.keys()):
@@ -698,6 +964,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[
 
         if isinstance(matches, str):
             order["medicine_name"] = matches
+            context["last_medicine_name"] = matches
+            context["last_unit"] = str(order.get("unit") or context.get("last_unit") or "strip")
         else:
             pending_medicine_choice = matches
             pending_order_data = order

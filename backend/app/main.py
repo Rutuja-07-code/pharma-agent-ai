@@ -4,7 +4,7 @@ import os
 import re
 import csv
 from datetime import date
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,14 +46,19 @@ except ModuleNotFoundError:
     from refill_engine import get_due_refills
 
 try:
-    from backend.app.whatsapp_service import run_daily_whatsapp_reminders
+    from backend.app.whatsapp_service import run_daily_whatsapp_reminders, send_whatsapp_message
 except ModuleNotFoundError:
-    from whatsapp_service import run_daily_whatsapp_reminders
+    from whatsapp_service import run_daily_whatsapp_reminders, send_whatsapp_message
 
 try:
     from backend.app.history_data_loader import load_orders
 except ModuleNotFoundError:
     from history_data_loader import load_orders
+
+try:
+    from backend.app.order_history_store import append_order, list_orders
+except ModuleNotFoundError:
+    from order_history_store import append_order, list_orders
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -127,6 +132,7 @@ class ChatRequest(BaseModel):
     message: str
     user_id: Optional[str] = None
     phone: Optional[str] = None
+    chat_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -164,6 +170,48 @@ class UserOrderEventRequest(BaseModel):
     days_supply: Optional[int] = None
 
 
+class WhatsAppSendRequest(BaseModel):
+    message: str
+    phone: Optional[str] = None
+    username: Optional[str] = None
+
+
+class WhatsAppSendResponse(BaseModel):
+    ok: bool
+    to: str
+    sid: Optional[str] = None
+    status: Optional[str] = None
+    error: Optional[str] = None
+
+
+class OrderCreateRequest(BaseModel):
+    patient_id: str
+    username: str
+    phone: str
+    medicine_name: str
+    quantity: int
+    dosage_frequency: str
+    ordered_at: Optional[str] = None
+    unit_price: Optional[float] = 0.0
+    total_price: Optional[float] = 0.0
+    status: Optional[str] = "Placed"
+    source: Optional[str] = "chat-confirmation"
+
+
+class OrderRecord(BaseModel):
+    patient_id: str
+    username: str
+    phone: str
+    medicine_name: str
+    quantity: int
+    dosage_frequency: str
+    ordered_at: str
+    unit_price: float = 0.0
+    total_price: float = 0.0
+    status: str = "Placed"
+    source: str = "chat-confirmation"
+
+
 def _normalize_phone(raw_phone: str) -> str:
     value = str(raw_phone or "").strip()
     if not value:
@@ -175,6 +223,24 @@ def _normalize_phone(raw_phone: str) -> str:
     if len(digits) == 10:
         return f"+91{digits}"
     return f"+{digits}" if digits else ""
+
+
+def _lookup_phone_by_username(username: str) -> str:
+    value = str(username or "").strip()
+    if not value:
+        return ""
+    if not CONTACT_FILE_PATH.exists():
+        return ""
+    try:
+        with CONTACT_FILE_PATH.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                row_user = str(row.get("patient_id", "")).strip()
+                if row_user.lower() == value.lower():
+                    return _normalize_phone(str(row.get("phone", "")).strip())
+    except Exception:
+        return ""
+    return ""
 
 
 def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Dict[str, str]:
@@ -312,24 +378,35 @@ def chat(req: ChatRequest):
     user_message = req.message
     user_id = req.user_id or "GUEST"
     phone = req.phone
+    chat_id = req.chat_id
     
-    logger.info(f"Chat request - user_id: {user_id}, phone: {phone}")
+    logger.info(f"Chat request - user_id: {user_id}, phone: {phone}, chat_id: {chat_id}")
 
     if langfuse_client is None:
         langfuse_client = _init_langfuse()
 
     if langfuse_client is None:
-        result = _resolve_chat_result(pharmacy_chatbot(user_message, user_id=user_id, phone=phone))
+        result = _resolve_chat_result(
+            pharmacy_chatbot(user_message, user_id=user_id, phone=phone, chat_id=chat_id)
+        )
         return result
 
     try:
         with langfuse_client.start_as_current_span(
             name="pharma-chat-request",
-            input={"message": user_message, "user_id": user_id},
+            input={"message": user_message, "user_id": user_id, "chat_id": chat_id},
             metadata={"route": "/chat"},
         ):
             tracer = _build_agent_tracer(langfuse_client)
-            result = _resolve_chat_result(pharmacy_chatbot(user_message, trace=tracer, user_id=user_id, phone=phone))
+            result = _resolve_chat_result(
+                pharmacy_chatbot(
+                    user_message,
+                    trace=tracer,
+                    user_id=user_id,
+                    phone=phone,
+                    chat_id=chat_id,
+                )
+            )
             langfuse_client.update_current_span(
                 output={
                     "reply": result["reply"],
@@ -434,6 +511,30 @@ def admin_send_reminders(req: AdminReminderRequest):
     )
 
 
+@app.post("/admin/whatsapp/send", response_model=WhatsAppSendResponse)
+def admin_send_whatsapp(req: WhatsAppSendRequest):
+    text = str(req.message or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="message is required.")
+
+    phone = _normalize_phone(str(req.phone or "").strip())
+    if not phone and req.username:
+        phone = _lookup_phone_by_username(req.username)
+    if not phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide a valid phone or username with a phone in patient_contacts.csv.",
+        )
+
+    result = send_whatsapp_message(phone, text)
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=502,
+            detail=result.get("error") or "Failed to send WhatsApp message.",
+        )
+    return result
+
+
 @app.get("/admin/sales-overview")
 def get_sales_overview():
     try:
@@ -482,7 +583,7 @@ def get_user_orders():
         orders_df['patient_id'] = orders_df['patient_id'].astype(str).str.strip()
         
         try:
-            contacts_df = pd.read_csv(str(CONTACT_FILE_PATH))
+            contacts_df = pd.read_csv(str(CONTACT_FILE_PATH), dtype={"patient_id": str, "phone": str})
             contacts_df['patient_id'] = contacts_df['patient_id'].astype(str).str.strip()
             contacts_df['phone'] = contacts_df['phone'].astype(str)
             
@@ -498,10 +599,16 @@ def get_user_orders():
         
         result = merged[['patient_id', 'product_name', 'purchase_date', 'quantity']].copy()
         
-        if 'phone' in merged.columns:
-            result['phone'] = merged['phone']
+        # Merge can create phone_x/phone_y when both sources contain a phone column.
+        phone_candidates = [c for c in ("phone", "phone_y", "phone_x") if c in merged.columns]
+        if phone_candidates:
+            phone_df = merged[phone_candidates].copy().fillna("")
+            for col in phone_candidates:
+                phone_df[col] = phone_df[col].astype(str).str.strip()
+                phone_df[col] = phone_df[col].replace({"nan": "", "None": ""})
+            result['phone'] = phone_df.bfill(axis=1).iloc[:, 0]
         else:
-            result['phone'] = None
+            result['phone'] = ""
         
         result['purchase_date'] = result['purchase_date'].dt.strftime('%Y-%m-%d %H:%M')
         result = result.sort_values('purchase_date', ascending=False)
@@ -602,6 +709,62 @@ def user_order_event(req: UserOrderEventRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "contact": row}
+
+
+@app.post("/orders", response_model=OrderRecord)
+def create_order(req: OrderCreateRequest):
+    patient_id = str(req.patient_id or "").strip()
+    username = str(req.username or "").strip()
+    phone = _normalize_phone(str(req.phone or "").strip())
+    medicine_name = str(req.medicine_name or "").strip()
+    dosage_frequency = str(req.dosage_frequency or "").strip()
+
+    if not patient_id:
+        raise HTTPException(status_code=400, detail="patient_id is required.")
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required.")
+    if not phone:
+        raise HTTPException(status_code=400, detail="phone is required.")
+    if not medicine_name:
+        raise HTTPException(status_code=400, detail="medicine_name is required.")
+    if int(req.quantity or 0) <= 0:
+        raise HTTPException(status_code=400, detail="quantity must be > 0.")
+    if not dosage_frequency:
+        raise HTTPException(status_code=400, detail="dosage_frequency is required.")
+
+    record = append_order(
+        {
+            "patient_id": patient_id,
+            "username": username,
+            "phone": phone,
+            "medicine_name": medicine_name,
+            "quantity": int(req.quantity),
+            "dosage_frequency": dosage_frequency,
+            "ordered_at": req.ordered_at,
+            "unit_price": float(req.unit_price or 0.0),
+            "total_price": float(req.total_price or 0.0),
+            "status": req.status or "Placed",
+            "source": req.source or "chat-confirmation",
+        }
+    )
+    return record
+
+
+@app.get("/orders", response_model=List[OrderRecord])
+def get_orders(
+    patient_id: Optional[str] = None,
+    username: Optional[str] = None,
+    phone: Optional[str] = None,
+    limit: Optional[int] = 200,
+):
+    safe_limit = max(1, min(int(limit or 200), 1000))
+    records = list_orders(
+        patient_id=str(patient_id or "").strip() or None,
+        username=str(username or "").strip() or None,
+        phone=str(phone or "").strip() or None,
+        limit=safe_limit,
+    )
+    return records
 
 
 @app.post("/webhooks/whatsapp")

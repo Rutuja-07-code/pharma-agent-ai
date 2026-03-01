@@ -40,3 +40,4 @@
 {"timestamp": "2026-02-28T22:23:44.464522+00:00", "medicine_name": "Vitasprint B12 Kapseln", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
 {"timestamp": "2026-02-28T22:23:44.464721+00:00", "medicine_name": "Sinupret\u00ae Saft", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
 {"timestamp": "2026-02-28T22:23:44.465057+00:00", "medicine_name": "Diclo-ratiopharm Schmerzgel", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}
+{"timestamp": "2026-03-01T05:13:11.893690+00:00", "medicine_name": "Paracetamol apodiscounter 500 mg Tabletten", "previous_stock": 0, "new_stock": 60, "added_units": 60, "rule": "stock < 10 => refill to 60"}

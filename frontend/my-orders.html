@@ -69,6 +69,13 @@
         return d.toLocaleString();
       }
 
+      function getApiBase() {
+        return (
+          (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") ||
+          "http://127.0.0.1:8000"
+        );
+      }
+
       async function getInventoryPriceMap() {
         try {
           const base =
@@ -89,11 +96,43 @@
         }
       }
 
-      async function loadOrders() {
+      async function loadOrdersFromBackend() {
+        const username = localStorage.getItem("pharma_username") || "GUEST";
+        const userRaw = localStorage.getItem("cureos_user");
+        let phone = "";
+        try {
+          if (userRaw) phone = String(JSON.parse(userRaw)?.phone || "").trim();
+        } catch {}
+
+        const query = new URLSearchParams();
+        if (username) query.set("username", username);
+        if (phone) query.set("phone", phone);
+        query.set("limit", "500");
+
+        const res = await fetch(`${getApiBase()}/orders?${query.toString()}`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch orders: ${res.status}`);
+        }
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return [];
+        return rows.map((o) => ({
+          username: o.username,
+          medicine_name: o.medicine_name,
+          quantity: Number(o.quantity || 0),
+          unit_price: Number(o.unit_price || 0),
+          total_price: Number(o.total_price || 0),
+          ordered_at: o.ordered_at,
+          status: o.status || "Placed",
+          dosage_frequency: o.dosage_frequency || "",
+          phone: o.phone || "",
+        }));
+      }
+
+      async function loadOrdersFromLocalFallback() {
         const username = localStorage.getItem("pharma_username") || "User";
         const allOrders = JSON.parse(localStorage.getItem(ORDERS_STORAGE_KEY) || "[]");
         const priceMap = await getInventoryPriceMap();
-        const orders = allOrders
+        return allOrders
           .filter((o) => (o.username || "User") === username)
           .map((o) => {
             let unitPrice = Number(o.unit_price || 0);
@@ -108,19 +147,9 @@
             return { ...o, unit_price: unitPrice, total_price: totalPrice };
           })
           .sort((a, b) => new Date(b.ordered_at) - new Date(a.ordered_at));
+      }
 
-        // Persist repaired prices for older zero-priced orders.
-        const merged = allOrders.map((o) => {
-          if ((o.username || "User") !== username) return o;
-          const fixed = orders.find((x) =>
-            x.ordered_at === o.ordered_at &&
-            x.medicine_name === o.medicine_name &&
-            Number(x.quantity || 0) === Number(o.quantity || 0)
-          );
-          return fixed || o;
-        });
-        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(merged));
-
+      function renderOrders(orders, fromBackend = true) {
         const totalOrders = orders.length;
         const totalSpent = orders.reduce((sum, o) => sum + Number(o.total_price || 0), 0);
         const lastOrderText = totalOrders ? formatDate(orders[0].ordered_at) : "-";
@@ -146,9 +175,19 @@
             <td>${o.quantity || 0}</td>
             <td>${formatCurrency(o.unit_price)}</td>
             <td>${formatCurrency(o.total_price)}</td>
-            <td><span class="order-status">Placed</span></td>
+            <td><span class="order-status">${fromBackend ? (o.status || "Placed") : "Placed"}</span></td>
           </tr>
         `).join("");
+      }
+
+      async function loadOrders() {
+        try {
+          const orders = await loadOrdersFromBackend();
+          renderOrders(orders, true);
+        } catch {
+          const fallback = await loadOrdersFromLocalFallback();
+          renderOrders(fallback, false);
+        }
       }
 
       loadOrders();
