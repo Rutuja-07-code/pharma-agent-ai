@@ -49,6 +49,11 @@ except ModuleNotFoundError:
     from whatsapp_service import run_daily_whatsapp_reminders
 
 try:
+    from backend.app.history_data_loader import load_orders
+except ModuleNotFoundError:
+    from history_data_loader import load_orders
+
+try:
     from apscheduler.schedulers.background import BackgroundScheduler
 except ModuleNotFoundError:
     BackgroundScheduler = None
@@ -62,6 +67,7 @@ logger = logging.getLogger("pharma.langfuse")
 
 REFILL_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "Consumer Order History 1.xlsx"
 CONTACT_FILE_PATH = Path(__file__).resolve().parents[1] / "data" / "patient_contacts.csv"
+ORDER_HISTORY_PATH = Path(__file__).resolve().parents[1] / "data" / "Consumer Order History 1.xlsx"
 scheduler = None
 
 
@@ -104,8 +110,21 @@ app.add_middleware(
 app.include_router(inventory_router)
 
 
+class UserRegisterRequest(BaseModel):
+    username: str
+    phone: str
+    password: str
+
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 class ChatRequest(BaseModel):
     message: str
+    user_id: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -210,22 +229,26 @@ def _build_agent_tracer(client: Optional[Langfuse]):
 def chat(req: ChatRequest):
     global langfuse_client
     user_message = req.message
+    user_id = req.user_id or "GUEST"
+    phone = req.phone
+    
+    logger.info(f"Chat request - user_id: {user_id}, phone: {phone}")
 
     if langfuse_client is None:
         langfuse_client = _init_langfuse()
 
     if langfuse_client is None:
-        result = _resolve_chat_result(pharmacy_chatbot(user_message))
+        result = _resolve_chat_result(pharmacy_chatbot(user_message, user_id=user_id, phone=phone))
         return result
 
     try:
         with langfuse_client.start_as_current_span(
             name="pharma-chat-request",
-            input={"message": user_message},
+            input={"message": user_message, "user_id": user_id},
             metadata={"route": "/chat"},
         ):
             tracer = _build_agent_tracer(langfuse_client)
-            result = _resolve_chat_result(pharmacy_chatbot(user_message, trace=tracer))
+            result = _resolve_chat_result(pharmacy_chatbot(user_message, trace=tracer, user_id=user_id, phone=phone))
             langfuse_client.update_current_span(
                 output={
                     "reply": result["reply"],
@@ -328,6 +351,145 @@ def admin_send_reminders(req: AdminReminderRequest):
         max_overdue_days=req.max_overdue_days,
         dry_run=req.dry_run,
     )
+
+
+@app.get("/admin/sales-overview")
+def get_sales_overview():
+    try:
+        df = load_orders(str(ORDER_HISTORY_PATH))
+        df['date'] = df['purchase_date'].dt.date
+        
+        sales_by_date = df.groupby('date').agg(
+            orders=('patient_id', 'nunique'),
+            revenue=('total_price_(eur)', 'sum'),
+            items=('quantity', 'sum')
+        ).reset_index()
+        
+        sales_by_date['avgOrder'] = (sales_by_date['revenue'] / sales_by_date['orders']).round(2)
+        sales_by_date['date'] = sales_by_date['date'].astype(str)
+        
+        return sales_by_date.tail(10).to_dict(orient='records')
+    except Exception as e:
+        logger.exception(f"Failed to load sales overview: {e}")
+        return []
+
+
+@app.get("/admin/top-products")
+def get_top_products():
+    try:
+        df = load_orders(str(ORDER_HISTORY_PATH))
+        
+        product_sales = df.groupby('product_name').agg(
+            units=('quantity', 'sum'),
+            revenue=('total_price_(eur)', 'sum')
+        ).reset_index()
+        
+        product_sales = product_sales.sort_values('revenue', ascending=False).head(10)
+        product_sales['rank'] = range(1, len(product_sales) + 1)
+        
+        return product_sales[['rank', 'product_name', 'units', 'revenue']].to_dict(orient='records')
+    except Exception as e:
+        logger.exception(f"Failed to load top products: {e}")
+        return []
+
+
+@app.get("/admin/user-orders")
+def get_user_orders():
+    try:
+        import pandas as pd
+        orders_df = load_orders(str(ORDER_HISTORY_PATH))
+        orders_df['patient_id'] = orders_df['patient_id'].astype(str).str.strip()
+        
+        try:
+            contacts_df = pd.read_csv(str(CONTACT_FILE_PATH))
+            contacts_df['patient_id'] = contacts_df['patient_id'].astype(str).str.strip()
+            contacts_df['phone'] = contacts_df['phone'].astype(str)
+            
+            merged = orders_df.merge(
+                contacts_df[['patient_id', 'phone']],
+                on='patient_id',
+                how='left'
+            )
+        except Exception as e:
+            logger.exception(f"Failed to merge contacts: {e}")
+            merged = orders_df.copy()
+            merged['phone'] = None
+        
+        result = merged[['patient_id', 'product_name', 'purchase_date', 'quantity']].copy()
+        
+        if 'phone' in merged.columns:
+            result['phone'] = merged['phone']
+        else:
+            result['phone'] = None
+        
+        result['purchase_date'] = result['purchase_date'].dt.strftime('%Y-%m-%d %H:%M')
+        result = result.sort_values('purchase_date', ascending=False)
+        
+        result = result[['patient_id', 'phone', 'product_name', 'purchase_date', 'quantity']]
+        
+        return result.to_dict(orient='records')
+    except Exception as e:
+        logger.exception(f"Failed to load user orders: {e}")
+        return []
+
+
+@app.post("/auth/register")
+def register_user(req: UserRegisterRequest):
+    try:
+        import pandas as pd
+        
+        # Check if user already exists
+        if CONTACT_FILE_PATH.exists():
+            contacts_df = pd.read_csv(CONTACT_FILE_PATH)
+            if req.username in contacts_df['patient_id'].values:
+                raise HTTPException(status_code=400, detail="Username already exists")
+        else:
+            contacts_df = pd.DataFrame(columns=['patient_id', 'email', 'phone', 'whatsapp', 'last_purchase_date', 'days_supply'])
+        
+        # Add new user
+        new_user = {
+            'patient_id': req.username,
+            'email': f"{req.username.lower()}@example.com",
+            'phone': req.phone,
+            'whatsapp': req.phone,
+            'last_purchase_date': None,
+            'days_supply': 30
+        }
+        
+        contacts_df = pd.concat([contacts_df, pd.DataFrame([new_user])], ignore_index=True)
+        contacts_df.to_csv(CONTACT_FILE_PATH, index=False)
+        
+        return {"success": True, "message": "User registered successfully"}
+    except Exception as e:
+        logger.exception(f"Registration failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/auth/login")
+def login_user(req: UserLoginRequest):
+    try:
+        import pandas as pd
+        
+        if not CONTACT_FILE_PATH.exists():
+            raise HTTPException(status_code=400, detail="No users registered")
+        
+        contacts_df = pd.read_csv(CONTACT_FILE_PATH)
+        user_row = contacts_df[contacts_df['patient_id'] == req.username]
+        
+        if user_row.empty:
+            raise HTTPException(status_code=400, detail="User not found")
+        
+        user_data = user_row.iloc[0]
+        return {
+            "success": True,
+            "user": {
+                "username": user_data['patient_id'],
+                "phone": str(user_data['phone'])
+            }
+        }
+    except Exception as e:
+        logger.exception(f"Login failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/webhooks/whatsapp")

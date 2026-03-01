@@ -283,6 +283,24 @@
             </table>
           </div>
         </section>
+
+        <section class="admin-section">
+          <h2 class="section-title">User Order History</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Phone Number</th>
+                  <th>Medicine Name</th>
+                  <th>Date of Purchase</th>
+                  <th>Quantity</th>
+                </tr>
+              </thead>
+              <tbody id="user-orders-body"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -305,22 +323,10 @@
 
       let inventoryData = [];
       let refillLogData = [];
-
-      const salesData = [
-        { date: 'Feb 23, 2026', orders: 42, revenue: 8500, avgOrder: 202, items: 156 },
-        { date: 'Feb 24, 2026', orders: 38, revenue: 7800, avgOrder: 205, items: 142 },
-        { date: 'Feb 25, 2026', orders: 51, revenue: 10200, avgOrder: 200, items: 189 },
-        { date: 'Feb 26, 2026', orders: 47, revenue: 9450, avgOrder: 201, items: 173 },
-        { date: 'Feb 27, 2026', orders: 54, revenue: 11200, avgOrder: 207, items: 198 },
-      ];
-
-      const topProducts = [
-        { rank: 1, name: 'Paracetamol 650mg', units: 1240, revenue: 5580, trend: 'up 12%' },
-        { rank: 2, name: 'Aspirin 500mg', units: 980, revenue: 4900, trend: 'up 8%' },
-        { rank: 3, name: 'Multivitamin', units: 850, revenue: 5950, trend: 'down 3%' },
-        { rank: 4, name: 'Vitamin D3', units: 720, revenue: 1800, trend: 'up 15%' },
-        { rank: 5, name: 'Amoxicillin 250mg', units: 560, revenue: 6720, trend: 'up 5%' },
-      ];
+      let salesData = [];
+      let topProducts = [];
+      let userOrders = [];
+      let refreshInterval = null;
 
       function getRegisteredUsers() {
         const users = JSON.parse(localStorage.getItem('cureos_users') || '[]');
@@ -402,12 +408,16 @@
 
       function populateSales() {
         const tbody = document.getElementById('sales-body');
+        if (!salesData || salesData.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No sales data available</td></tr>';
+          return;
+        }
         tbody.innerHTML = salesData.map(sale => `
           <tr>
             <td>${sale.date}</td>
             <td>${sale.orders}</td>
-            <td>Rs ${sale.revenue}</td>
-            <td>Rs ${sale.avgOrder}</td>
+            <td>Rs ${Number(sale.revenue).toFixed(2)}</td>
+            <td>Rs ${Number(sale.avgOrder).toFixed(2)}</td>
             <td>${sale.items}</td>
           </tr>
         `).join('');
@@ -415,13 +425,17 @@
 
       function populateTopProducts() {
         const tbody = document.getElementById('top-products-body');
+        if (!topProducts || topProducts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No product data available</td></tr>';
+          return;
+        }
         tbody.innerHTML = topProducts.map(product => `
           <tr>
             <td>${product.rank}</td>
-            <td>${product.name}</td>
+            <td>${product.product_name || product.name}</td>
             <td>${product.units}</td>
-            <td>Rs ${product.revenue}</td>
-            <td style="color: ${product.trend.includes('up') ? '#059669' : '#dc2626'}; font-weight: 600;">${product.trend}</td>
+            <td>Rs ${Number(product.revenue).toFixed(2)}</td>
+            <td>-</td>
           </tr>
         `).join('');
       }
@@ -435,6 +449,61 @@
         document.getElementById('total-value').textContent = totalUsers;
         document.getElementById('low-stock').textContent = lowStock;
         document.getElementById('out-of-stock').textContent = outOfStock;
+      }
+
+      async function fetchSalesData() {
+        try {
+          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
+          const res = await fetch(`${base}/admin/sales-overview`);
+          salesData = await res.json();
+          populateSales();
+        } catch (e) {
+          console.error('Failed to fetch sales data:', e);
+        }
+      }
+
+      async function fetchTopProducts() {
+        try {
+          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
+          const res = await fetch(`${base}/admin/top-products`);
+          topProducts = await res.json();
+          populateTopProducts();
+        } catch (e) {
+          console.error('Failed to fetch top products:', e);
+        }
+      }
+
+      async function fetchUserOrders() {
+        try {
+          const base = (localStorage.getItem("PHARMA_API_BASE") || "").replace(/\/+$/, "") || "http://127.0.0.1:8000";
+          const res = await fetch(`${base}/admin/user-orders`);
+          if (!res.ok) {
+            console.error('Failed to fetch user orders:', res.status, res.statusText);
+            return;
+          }
+          userOrders = await res.json();
+          console.log('Fetched user orders:', userOrders.length, 'records');
+          populateUserOrders();
+        } catch (e) {
+          console.error('Failed to fetch user orders:', e);
+        }
+      }
+
+      function populateUserOrders() {
+        const tbody = document.getElementById('user-orders-body');
+        if (!userOrders || userOrders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No orders found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = userOrders.map(order => `
+          <tr>
+            <td>${order.patient_id || '-'}</td>
+            <td>${order.phone || '-'}</td>
+            <td>${order.product_name || '-'}</td>
+            <td>${order.purchase_date || '-'}</td>
+            <td>${order.quantity || 0}</td>
+          </tr>
+        `).join('');
       }
 
       async function initDashboard() {
@@ -459,13 +528,26 @@
 
         populateInventory();
         populateRefillLog();
-        populateSales();
-        populateTopProducts();
         populateRegisteredUsers();
         updateStatistics();
+
+        await fetchSalesData();
+        await fetchTopProducts();
+        await fetchUserOrders();
+
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(async () => {
+          await fetchSalesData();
+          await fetchTopProducts();
+          await fetchUserOrders();
+        }, 5000);
       }
 
       document.addEventListener('DOMContentLoaded', initDashboard);
+
+      window.addEventListener('beforeunload', () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+      });
     </script>
   </body>
 </html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test User Order</title>
+</head>
+<body>
+    <h1>Test User Order System</h1>
+    <button onclick="testOrder()">Place Test Order</button>
+    <button onclick="checkOrders()">Check Orders</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testOrder() {
+            const output = document.getElementById('output');
+            output.textContent = 'Placing order...';
+            
+            const response = await fetch('http://127.0.0.1:8000/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: 'I need 2 Paracetamol',
+                    user_id: 'webtest',
+                    phone: '1234567890'
+                })
+            });
+            
+            const data = await response.json();
+            output.textContent = `Order placed!\n\n${JSON.stringify(data, null, 2)}`;
+        }
+        
+        async function checkOrders() {
+            const output = document.getElementById('output');
+            output.textContent = 'Fetching orders...';
+            
+            const response = await fetch('http://127.0.0.1:8000/admin/user-orders');
+            const orders = await response.json();
+            
+            const webtest = orders.filter(o => o.patient_id === 'webtest');
+            output.textContent = `Found ${webtest.length} orders for 'webtest':\n\n${JSON.stringify(webtest, null, 2)}`;
+        }
+    </script>
+</body>
+</html>

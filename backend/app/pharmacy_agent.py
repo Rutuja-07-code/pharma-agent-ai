@@ -312,6 +312,8 @@ def _execute_order_with_agent_traces(
     order: Dict[str, Any],
     trace: AgentTracer = None,
     stock_before: Optional[int] = None,
+    user_id: Optional[str] = None,
+    phone: Optional[str] = None,
 ):
     qty = int(order.get("quantity", 0) or 0)
     med_name = str(order.get("medicine_name", "")).strip()
@@ -330,7 +332,7 @@ def _execute_order_with_agent_traces(
             },
         )
 
-    confirmation = place_order(order)
+    confirmation = place_order(order, user_id=user_id or "GUEST", phone=phone)
     is_success = "Order Confirmed!" in str(confirmation)
     _trace_agent(
         trace,
@@ -371,7 +373,7 @@ def _execute_order_with_agent_traces(
 # ================================
 # Main Chatbot Function
 # ================================
-def pharmacy_chatbot(user_message, trace: AgentTracer = None):
+def pharmacy_chatbot(user_message, trace: AgentTracer = None, user_id: Optional[str] = None, phone: Optional[str] = None):
     global pending_medicine_choice
     global pending_order_data
 
@@ -456,6 +458,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None):
                 order,
                 trace=trace,
                 stock_before=int(order.get("quantity", 0) or 0),
+                user_id=user_id,
+                phone=phone,
             )
             pending_partial_order = None
             pending_partial_requires_rx = False
@@ -477,7 +481,7 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None):
             order = pending_prescription_order
             order["quantity"] = pending_final_quantity
 
-            confirmation = _execute_order_with_agent_traces(order, trace=trace)
+            confirmation = _execute_order_with_agent_traces(order, trace=trace, user_id=user_id, phone=phone)
             pending_prescription_order = None
             pending_final_quantity = None
             pending_rx_confirmation = False
@@ -581,6 +585,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None):
                     order,
                     trace=trace,
                     stock_before=int(latest_decision.get("stock", 0) or 0),
+                    user_id=user_id,
+                    phone=phone,
                 )
                 pending_prescription_order = None
                 pending_final_quantity = None
@@ -597,6 +603,8 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None):
                 order,
                 trace=trace,
                 stock_before=int(latest_decision.get("stock", 0) or 0),
+                user_id=user_id,
+                phone=phone,
             )
             pending_prescription_order = None
             pending_final_quantity = None
@@ -770,5 +778,7 @@ def pharmacy_chatbot(user_message, trace: AgentTracer = None):
             order,
             trace=trace,
             stock_before=int(stock),
+            user_id=user_id,
+            phone=phone,
         )
         return f"Stock available.\n{confirmation}"

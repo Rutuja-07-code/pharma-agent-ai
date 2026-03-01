@@ -1,8 +1,13 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
+import uuid
+import csv
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
 PRICE_FILE = Path(__file__).resolve().parent.parent / "data" / "products-export.xlsx"
+ORDER_HISTORY_FILE = Path(__file__).resolve().parent.parent / "data" / "Consumer Order History 1.xlsx"
+CONTACTS_FILE = Path(__file__).resolve().parent.parent / "data" / "patient_contacts.csv"
 DEFAULT_PRICE = 9.99
 
 
@@ -92,7 +97,7 @@ def quote_order(order):
     }
 
 
-def place_order(order):
+def place_order(order, user_id="GUEST", phone=None):
     med = order["medicine_name"]
     qty = int(order["quantity"])
 
@@ -106,6 +111,7 @@ def place_order(order):
     idx = match.index[0]
     med_name = str(df.loc[idx, "medicine_name"]).strip()
     stock = int(df.loc[idx, "stock"])
+    prescription_req = str(df.loc[idx, "prescription_required"]).lower() == "true"
 
     if stock <= 0:
         return f"Cannot place order. '{med}' is out of stock."
@@ -124,6 +130,11 @@ def place_order(order):
     unit_price = _safe_unit_price(price_map.get(med_name.lower(), 0.0))
     total_price = unit_price * qty
 
+    _save_order_to_history(user_id, med_name, qty, total_price, prescription_req)
+    
+    if phone:
+        _update_user_contact(user_id, phone)
+
     return (
         "Order Confirmed!\n"
         f"Medicine: {med_name}\n"
@@ -131,6 +142,69 @@ def place_order(order):
         f"Unit Price: EUR {unit_price:.2f}\n"
         f"Total Price: EUR {total_price:.2f}\n"
     )
+
+
+def _save_order_to_history(user_id, product_name, quantity, total_price, prescription_required):
+    try:
+        if ORDER_HISTORY_FILE.exists():
+            df = pd.read_excel(ORDER_HISTORY_FILE, header=4)
+        else:
+            df = pd.DataFrame(columns=[
+                'Patient ID', 'Patient Age', 'Patient Gender', 'Purchase Date',
+                'Product Name', 'Quantity', 'Total Price (EUR)', 
+                'Dosage Frequency', 'Prescription Required'
+            ])
+        
+        new_order = {
+            'Patient ID': user_id,
+            'Patient Age': None,
+            'Patient Gender': None,
+            'Purchase Date': datetime.now(),
+            'Product Name': product_name,
+            'Quantity': quantity,
+            'Total Price (EUR)': total_price,
+            'Dosage Frequency': None,
+            'Prescription Required': 'Yes' if prescription_required else 'No'
+        }
+        
+        df = pd.concat([df, pd.DataFrame([new_order])], ignore_index=True)
+        
+        with pd.ExcelWriter(ORDER_HISTORY_FILE, engine='openpyxl') as writer:
+            empty_df = pd.DataFrame([[''], [''], [''], ['']])
+            empty_df.to_excel(writer, index=False, header=False, startrow=0)
+            df.to_excel(writer, index=False, startrow=4)
+    except Exception as e:
+        print(f"Failed to save order to history: {e}")
+
+
+def _update_user_contact(user_id, phone):
+    try:
+        print(f"Updating contact for user_id={user_id}, phone={phone}")
+        if CONTACTS_FILE.exists():
+            df = pd.read_csv(CONTACTS_FILE)
+        else:
+            df = pd.DataFrame(columns=['patient_id', 'email', 'phone', 'whatsapp', 'last_purchase_date', 'days_supply'])
+        
+        if user_id in df['patient_id'].values:
+            df.loc[df['patient_id'] == user_id, 'phone'] = phone
+            df.loc[df['patient_id'] == user_id, 'last_purchase_date'] = datetime.now().date()
+            print(f"Updated existing contact for {user_id}")
+        else:
+            new_contact = {
+                'patient_id': user_id,
+                'email': f"{user_id.lower()}@example.com",
+                'phone': phone,
+                'whatsapp': phone,
+                'last_purchase_date': datetime.now().date(),
+                'days_supply': 30
+            }
+            df = pd.concat([df, pd.DataFrame([new_contact])], ignore_index=True)
+            print(f"Added new contact for {user_id}")
+        
+        df.to_csv(CONTACTS_FILE, index=False)
+        print(f"Contact file saved successfully")
+    except Exception as e:
+        print(f"Failed to update user contact: {e}")
 
 
 def refill_stock(medicine_name, refill_quantity=105):

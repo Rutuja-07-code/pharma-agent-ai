@@ -343,6 +343,18 @@ if (window.location.pathname.endsWith("chat.html")) {
     localStorage.removeItem(ACTIVE_CHAT_ID_STORAGE_KEY);
     localStorage.setItem("pharma_clear_chat", "false");
   }
+  
+  // Update login status display
+  const loginStatusEl = document.getElementById('login-status');
+  if (loginStatusEl) {
+    const username = localStorage.getItem('pharma_username');
+    if (username && username !== 'GUEST') {
+      loginStatusEl.textContent = `Logged in as: ${username}`;
+      loginStatusEl.style.color = '#16a085';
+    } else {
+      loginStatusEl.innerHTML = '<a href="login.html" style="color: #dc3545; text-decoration: underline;">Not logged in - Click to login</a>';
+    }
+  }
 }
 restoreChat();
 setPrescriptionUploadVisibility(false);
@@ -600,6 +612,19 @@ async function sendMessage(textFromVoice) {
   const message = textFromVoice || input?.value.trim();
   if (!message) return;
 
+  const username = localStorage.getItem("pharma_username") || "GUEST";
+  const userData = JSON.parse(localStorage.getItem("cureos_user") || '{}');
+  const phone = userData.phone || null;
+  
+  // Warn user if not logged in
+  if (username === "GUEST") {
+    const shouldLogin = confirm("You are not logged in. Orders will be saved as GUEST without your contact info.\n\nDo you want to login/signup first?");
+    if (shouldLogin) {
+      window.location.href = 'login.html';
+      return;
+    }
+  }
+
   appendMessage("user", message);
 
   if (input) input.value = "";
@@ -607,10 +632,12 @@ async function sendMessage(textFromVoice) {
   showTypingIndicator();
 
   try {
+    console.log('Sending chat request:', { username, phone, message });
+    
     const res = await fetchWithBackendFallback("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, user_id: username, phone: phone }),
     });
 
     if (!res.ok) {

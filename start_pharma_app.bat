@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal
 
 set "REPO_DIR=%~dp0"
@@ -32,4 +32,3 @@ start "" "%APP_URL%"
 echo Opened %APP_URL%
 
 endlocal
-
