@@ -9,6 +9,11 @@ from typing import Optional, Dict, Any
 
 import pandas as pd
 
+try:
+    from backend.app.prescription_rules import prescription_required_for
+except ModuleNotFoundError:
+    from prescription_rules import prescription_required_for
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 MEDICINE_DATA_FILE = DATA_DIR / "medicine_master.csv"
 PRESCRIPTION_DIR = DATA_DIR / "prescriptions"
@@ -37,7 +42,10 @@ def _normalize_text(value: str) -> str:
 
 def _extract_ocr_text(file_bytes: bytes) -> Dict[str, Any]:
     try:
-        from orc.orc_service import extract_text_from_image
+        try:
+            from backend.app.orc.orc_service import extract_text_from_image
+        except ModuleNotFoundError:
+            from orc.orc_service import extract_text_from_image
     except Exception as exc:
         return {"ok": False, "text": "", "error": f"OCR service unavailable: {exc}"}
 
@@ -121,7 +129,10 @@ def _lookup_medicine(medicine_name: str) -> Dict[str, Any]:
 
     row = match.iloc[0]
     matched = str(row.get("medicine_name", medicine_name)).strip()
-    requires_rx = str(row.get("prescription_required", "")).strip().lower() == "yes"
+    requires_rx = prescription_required_for(
+        row.get("medicine_name"),
+        row.get("prescription_required"),
+    )
     reason = (
         "Prescription requirement verified against dataset."
         if requires_rx

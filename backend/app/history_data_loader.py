@@ -8,3 +8,4 @@ def load_orders(file_path):
     df["purchase_date"] = pd.to_datetime(df["purchase_date"])
 
     return df
+

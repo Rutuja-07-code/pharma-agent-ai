@@ -1,13 +1,18 @@
 import pandas as pd
 from pathlib import Path
 
+try:
+    from backend.app.prescription_rules import prescription_label_for
+except ModuleNotFoundError:
+    from prescription_rules import prescription_label_for
+
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "medicine_master.csv"
 
 
 def _load_inventory():
     # Read fresh CSV every time so latest stock changes are reflected.
     df = pd.read_csv(DATA_PATH)
-    return df.rename(
+    df = df.rename(
         columns={
             "product name": "medicine_name",
             "prize": "price",
@@ -15,6 +20,15 @@ def _load_inventory():
             "prescription_required": "prescription_required",
         }
     )
+    if {"medicine_name", "prescription_required"}.issubset(df.columns):
+        df["prescription_required"] = df.apply(
+            lambda row: prescription_label_for(
+                row.get("medicine_name"),
+                row.get("prescription_required"),
+            ),
+            axis=1,
+        )
+    return df
 
 def search_medicine(query):
     df = _load_inventory()

@@ -411,6 +411,44 @@ def _extract_quantity_and_unit_from_message(message: str, fallback_unit: str = "
     }
 
 
+def _extract_medicine_name_from_order_message(message: str) -> str:
+    msg = str(message or "").strip().lower()
+    if not msg:
+        return ""
+
+    # Remove common request filler and quantity/unit tokens so matching uses the actual medicine phrase.
+    msg = re.sub(
+        r"\b(i need|need|i want|want|order|buy|book|purchase|refill|for)\b",
+        " ",
+        msg,
+    )
+    msg = re.sub(r"\b\d+(?:\.\d+)?\b", " ", msg)
+    msg = re.sub(
+        r"\b(strip|strips|tablet|tablets|capsule|capsules|bottle|bottles|pack|packs|unit|units|ml|mg|g)\b",
+        " ",
+        msg,
+    )
+    msg = re.sub(r"\s+", " ", msg).strip()
+    return msg
+
+
+def _extract_order_from_inventory_match(user_message: str) -> Optional[Dict[str, Any]]:
+    parsed = _extract_quantity_and_unit_from_message(user_message)
+    medicine_query = _extract_medicine_name_from_order_message(user_message)
+    if not medicine_query or parsed["quantity"] is None or parsed["quantity"] <= 0:
+        return None
+
+    matches = find_medicine_matches(medicine_query)
+    if matches is None or isinstance(matches, list):
+        return None
+
+    return {
+        "medicine_name": str(matches).strip(),
+        "quantity": int(parsed["quantity"]),
+        "unit": str(parsed["unit"] or "strip"),
+    }
+
+
 def _looks_like_followup_quantity_message(message: str) -> bool:
     msg = str(message or "").strip().lower()
     if not msg:
@@ -574,14 +612,26 @@ def pharmacy_chatbot(
 
     # Step 1: Handle multiple medicine choice
     if pending_medicine_choice is not None:
-        if not msg.isdigit():
-            return "Please reply with option number (1,2,3...)."
+        selected_name = None
+        if msg.isdigit():
+            choice = int(msg)
+            if not (1 <= choice <= len(pending_medicine_choice)):
+                return "Invalid option number."
+            selected_name = pending_medicine_choice[choice - 1]
+        else:
+            for option in pending_medicine_choice:
+                option_normalized = re.sub(r"[^a-z0-9]+", " ", str(option).lower()).strip()
+                if msg == option_normalized or msg in option_normalized:
+                    selected_name = option
+                    break
 
-        choice = int(msg)
-        if not (1 <= choice <= len(pending_medicine_choice)):
-            return "Invalid option number."
+        if not selected_name:
+            options = "\n".join([f"{i+1}. {name}" for i, name in enumerate(pending_medicine_choice)])
+            return (
+                "Please reply with the option number or type the medicine name exactly.\n\n"
+                f"{options}"
+            )
 
-        selected_name = pending_medicine_choice[choice - 1]
         if not pending_order_data:
             pending_medicine_choice = None
             return "Previous order context expired. Please enter your request again."
@@ -875,7 +925,16 @@ def pharmacy_chatbot(
 
     # Step 6: Extract order (LLM)
     if selected_order is None:
-        if context.get("last_medicine_name") and _looks_like_followup_quantity_message(user_message):
+        direct_inventory_order = _extract_order_from_inventory_match(user_message)
+        if direct_inventory_order:
+            order = direct_inventory_order
+            _trace_agent(
+                trace,
+                "Intent Agent",
+                input_payload={"user_message": user_message, "direct_inventory_match": True},
+                output_payload=dict(order),
+            )
+        elif context.get("last_medicine_name") and _looks_like_followup_quantity_message(user_message):
             parsed = _extract_quantity_and_unit_from_message(
                 user_message,
                 fallback_unit=str(context.get("last_unit") or "strip"),
@@ -973,7 +1032,7 @@ def pharmacy_chatbot(
             return (
                 "Multiple medicines found. Which one do you want?\n\n"
                 f"{options}\n\n"
-                "Reply with option number (1,2,3...)."
+                "Reply with option number or type the medicine name."
             )
 
     # Step 8: Safety check (stock + prescription)

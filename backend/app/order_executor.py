@@ -4,6 +4,11 @@ from datetime import datetime
 import uuid
 import csv
 
+try:
+    from backend.app.prescription_rules import prescription_required_for
+except ModuleNotFoundError:
+    from prescription_rules import prescription_required_for
+
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "medicine_master.csv"
 PRICE_FILE = Path(__file__).resolve().parent.parent / "data" / "products-export.xlsx"
 ORDER_HISTORY_FILE = Path(__file__).resolve().parent.parent / "data" / "Consumer Order History 1.xlsx"
@@ -111,7 +116,10 @@ def place_order(order, user_id="GUEST", phone=None):
     idx = match.index[0]
     med_name = str(df.loc[idx, "medicine_name"]).strip()
     stock = int(df.loc[idx, "stock"])
-    prescription_req = str(df.loc[idx, "prescription_required"]).lower() == "true"
+    prescription_req = prescription_required_for(
+        df.loc[idx, "medicine_name"],
+        df.loc[idx, "prescription_required"],
+    )
 
     if stock <= 0:
         return f"Cannot place order. '{med}' is out of stock."

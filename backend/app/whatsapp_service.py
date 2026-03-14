@@ -123,63 +123,78 @@ def get_patients_near_refill() -> List[Dict]:
         if refill_dt is None:
             continue
 
-        days_left = (refill_dt - now).days
-        print(
-            f"patient={patient_id} medicine={medicine_name} "
-            f"phone={phone} refill_date={refill_dt.date()} days_left={days_left}"
+        days_until_refill = (refill_dt.date() - now.date()).days
+        if days_until_refill < 0 or days_until_refill > 2:
+            continue
+
+        patients_to_notify.append(
+            {
+                "patient_id": patient_id,
+                "phone": phone,
+                "medicine_name": medicine_name,
+                "quantity": quantity,
+                "dosage_frequency": dosage_frequency,
+                "ordered_at": ordered_at_raw,
+                "refill_date": refill_dt.isoformat(),
+                "days_until_refill": days_until_refill,
+            }
         )
 
-        # Notify if refill is due in next 2 days (or overdue by up to 5 days).
-        if -5 <= days_left <= 2:
-            patients_to_notify.append(
+    return patients_to_notify
+
+
+def run_daily_whatsapp_reminders() -> Dict[str, object]:
+    patients = get_patients_near_refill()
+    sent_keys = _load_dispatch_log()
+    sent_count = 0
+    skipped_count = 0
+    errors: List[Dict[str, str]] = []
+
+    for row in patients:
+        patient_id = str(row.get("patient_id", "")).strip()
+        phone = str(row.get("phone", "")).strip()
+        medicine_name = str(row.get("medicine_name", "")).strip()
+        refill_date = str(row.get("refill_date", "")).strip()
+        days_until_refill = int(row.get("days_until_refill", 0) or 0)
+        dispatch_key = f"{patient_id}|{medicine_name}|{refill_date}"
+
+        if not patient_id or not phone or not medicine_name or not refill_date:
+            skipped_count += 1
+            continue
+
+        if dispatch_key in sent_keys:
+            skipped_count += 1
+            continue
+
+        if days_until_refill <= 0:
+            timing_text = "today"
+        elif days_until_refill == 1:
+            timing_text = "tomorrow"
+        else:
+            timing_text = f"in {days_until_refill} days"
+
+        message = (
+            f"Reminder: your medicine '{medicine_name}' may need a refill {timing_text}. "
+            "Reply here if you want to place an order."
+        )
+        result = send_whatsapp_message(phone, message)
+        if result.get("ok"):
+            sent_keys.add(dispatch_key)
+            sent_count += 1
+        else:
+            errors.append(
                 {
                     "patient_id": patient_id,
                     "phone": phone,
                     "medicine_name": medicine_name,
-                    "refill_date": refill_dt.date().isoformat(),
+                    "error": str(result.get("error") or "Unknown error"),
                 }
             )
-    return patients_to_notify
-
-
-def run_daily_whatsapp_reminders() -> Dict:
-    rows = get_patients_near_refill()
-    sent_keys = _load_dispatch_log()
-    sent = 0
-    failed = 0
-    skipped = 0
-
-    for row in rows:
-        dedupe_key = (
-            f"{row.get('patient_id')}|{row.get('phone')}|"
-            f"{row.get('medicine_name')}|{row.get('refill_date')}"
-        )
-        if dedupe_key in sent_keys:
-            skipped += 1
-            continue
-
-        ok = send_whatsapp(
-            row.get("phone", ""),
-            (
-                f"Hi. Your refill for {row.get('medicine_name', 'your medicine')} is due soon. "
-            ),
-        )
-        if ok:
-            sent += 1
-            sent_keys.add(dedupe_key)
-        else:
-            failed += 1
 
     _save_dispatch_log(sent_keys)
-    summary = {
-        "eligible": len(rows),
-        "sent": sent,
-        "failed": failed,
-        "skipped_already_sent": skipped,
+    return {
+        "checked": len(patients),
+        "sent": sent_count,
+        "skipped": skipped_count,
+        "errors": errors,
     }
-    print(f"[WHATSAPP_REMINDER_SUMMARY] {summary}")
-    return summary
-
-
-if __name__ == "__main__":
-    run_daily_whatsapp_reminders()

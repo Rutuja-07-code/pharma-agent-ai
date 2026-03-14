@@ -61,6 +61,11 @@ except ModuleNotFoundError:
     from order_history_store import append_order, list_orders
 
 try:
+    from backend.app.medicine_lookup import search_medicine
+except ModuleNotFoundError:
+    from medicine_lookup import search_medicine
+
+try:
     from apscheduler.schedulers.background import BackgroundScheduler
 except ModuleNotFoundError:
     BackgroundScheduler = None
@@ -212,6 +217,15 @@ class OrderRecord(BaseModel):
     source: str = "chat-confirmation"
 
 
+@app.get("/health")
+def health_check():
+    return {
+        "ok": True,
+        "frontend_dir": str(FRONTEND_DIR),
+        "assets_dir": str(ASSETS_DIR),
+    }
+
+
 def _normalize_phone(raw_phone: str) -> str:
     value = str(raw_phone or "").strip()
     if not value:
@@ -243,6 +257,48 @@ def _lookup_phone_by_username(username: str) -> str:
     return ""
 
 
+def _read_contact_rows() -> List[Dict[str, str]]:
+    fieldnames = [
+        "patient_id",
+        "email",
+        "phone",
+        "whatsapp",
+        "last_purchase_date",
+        "days_supply",
+        "password",
+    ]
+    if not CONTACT_FILE_PATH.exists():
+        return []
+
+    rows: List[Dict[str, str]] = []
+    with CONTACT_FILE_PATH.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            clean_row = {key: str(row.get(key, "") or "") for key in fieldnames}
+            if clean_row["patient_id"].strip():
+                rows.append(clean_row)
+    return rows
+
+
+def _write_contact_rows(rows: List[Dict[str, str]]) -> None:
+    fieldnames = [
+        "patient_id",
+        "email",
+        "phone",
+        "whatsapp",
+        "last_purchase_date",
+        "days_supply",
+        "password",
+    ]
+    CONTACT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with CONTACT_FILE_PATH.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(
+            [{key: str(row.get(key, "") or "") for key in fieldnames} for row in rows]
+        )
+
+
 def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Dict[str, str]:
     contact_path = CONTACT_FILE_PATH
     contact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,7 +309,15 @@ def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Di
 
     safe_days_supply = max(1, min(int(days_supply or 30), 365))
     today = date.today().isoformat()
-    fieldnames = ["patient_id", "email", "phone", "whatsapp", "last_purchase_date", "days_supply"]
+    fieldnames = [
+        "patient_id",
+        "email",
+        "phone",
+        "whatsapp",
+        "last_purchase_date",
+        "days_supply",
+        "password",
+    ]
     rows = []
     found = False
 
@@ -268,6 +332,7 @@ def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Di
                     clean_row["whatsapp"] = normalized_phone
                     clean_row["last_purchase_date"] = today
                     clean_row["days_supply"] = str(safe_days_supply)
+                    clean_row["password"] = str(clean_row.get("password", "") or "")
                     found = True
                 rows.append(clean_row)
 
@@ -280,6 +345,7 @@ def _upsert_patient_contact(patient_id: str, phone: str, days_supply: int) -> Di
                 "whatsapp": normalized_phone,
                 "last_purchase_date": today,
                 "days_supply": str(safe_days_supply),
+                "password": "",
             }
         )
 
@@ -346,6 +412,55 @@ def _resolve_chat_result(result: Any) -> Dict[str, Any]:
     }
 
 
+def _extract_lookup_query(message: str) -> str:
+    text = str(message or "").strip().lower()
+    if not text:
+        return ""
+
+    text = re.sub(
+        r"\b(i need|need|i want|want|show me|tell me about|do you have|check|search|for)\b",
+        " ",
+        text,
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_boolish_prescription(value: Any) -> bool:
+    return str(value or "").strip().lower() == "yes"
+
+
+def _refresh_medicine_lookup_reply(user_message: str, chat_result: Dict[str, Any]) -> Dict[str, Any]:
+    reply = str(chat_result.get("reply") or "").strip()
+    if not reply.lower().startswith("medicine info:"):
+        return chat_result
+
+    query = _extract_lookup_query(user_message) or str(user_message or "").strip()
+    if not query:
+        return chat_result
+
+    lookup = search_medicine(query)
+    if lookup.get("status") != "Found":
+        return chat_result
+
+    rows = lookup.get("results", [])
+    if not rows:
+        return chat_result
+
+    lines = []
+    for row in rows:
+        name = row.get("medicine_name", "Unknown")
+        stock = row.get("stock", "NA")
+        rx = row.get("prescription_required", "NA")
+        lines.append(f"- {name} | Stock: {stock} | Prescription: {rx}")
+
+    return {
+        "reply": "Medicine Info:\n" + "\n".join(lines),
+        # Only set prescription_required when the backend is actively waiting
+        # for an upload as part of an order flow, not for read-only lookups.
+        "prescription_required": False,
+    }
+
+
 def _build_agent_tracer(client: Optional[Langfuse]):
     if client is None:
         return None
@@ -389,6 +504,7 @@ def chat(req: ChatRequest):
         result = _resolve_chat_result(
             pharmacy_chatbot(user_message, user_id=user_id, phone=phone, chat_id=chat_id)
         )
+        result = _refresh_medicine_lookup_reply(user_message, result)
         return result
 
     try:
@@ -407,6 +523,7 @@ def chat(req: ChatRequest):
                     chat_id=chat_id,
                 )
             )
+            result = _refresh_medicine_lookup_reply(user_message, result)
             langfuse_client.update_current_span(
                 output={
                     "reply": result["reply"],
@@ -456,7 +573,10 @@ def submit_prescription(req: PrescriptionSubmitRequest):
 async def upload_prescription(image: UploadFile = File(...)):
     # Lazy import so server can still start even if OCR deps are not installed.
     try:
-        from orc.orc_service import extract_text_from_image
+        try:
+            from backend.app.orc.orc_service import extract_text_from_image
+        except ModuleNotFoundError:
+            from orc.orc_service import extract_text_from_image
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -624,30 +744,40 @@ def get_user_orders():
 @app.post("/auth/register")
 def register_user(req: UserRegisterRequest):
     try:
-        import pandas as pd
-        
-        # Check if user already exists
-        if CONTACT_FILE_PATH.exists():
-            contacts_df = pd.read_csv(CONTACT_FILE_PATH)
-            if req.username in contacts_df['patient_id'].values:
-                raise HTTPException(status_code=400, detail="Username already exists")
-        else:
-            contacts_df = pd.DataFrame(columns=['patient_id', 'email', 'phone', 'whatsapp', 'last_purchase_date', 'days_supply'])
-        
-        # Add new user
-        new_user = {
-            'patient_id': req.username,
-            'email': f"{req.username.lower()}@example.com",
-            'phone': req.phone,
-            'whatsapp': req.phone,
-            'last_purchase_date': None,
-            'days_supply': 30
+        username = str(req.username or "").strip()
+        password = str(req.password or "")
+        phone = _normalize_phone(str(req.phone or "").strip())
+
+        if not username or not password or not phone:
+            raise HTTPException(status_code=400, detail="username, phone, and password are required")
+
+        rows = _read_contact_rows()
+        if any(str(row.get("patient_id", "")).strip().lower() == username.lower() for row in rows):
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        rows.append(
+            {
+                "patient_id": username,
+                "email": f"{username.lower()}@example.com",
+                "phone": phone,
+                "whatsapp": phone,
+                "last_purchase_date": "",
+                "days_supply": "30",
+                "password": password,
+            }
+        )
+        _write_contact_rows(rows)
+
+        return {
+            "success": True,
+            "message": "User registered successfully",
+            "user": {
+                "username": username,
+                "phone": phone,
+            },
         }
-        
-        contacts_df = pd.concat([contacts_df, pd.DataFrame([new_user])], ignore_index=True)
-        contacts_df.to_csv(CONTACT_FILE_PATH, index=False)
-        
-        return {"success": True, "message": "User registered successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Registration failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -656,25 +786,36 @@ def register_user(req: UserRegisterRequest):
 @app.post("/auth/login")
 def login_user(req: UserLoginRequest):
     try:
-        import pandas as pd
-        
         if not CONTACT_FILE_PATH.exists():
             raise HTTPException(status_code=400, detail="No users registered")
-        
-        contacts_df = pd.read_csv(CONTACT_FILE_PATH)
-        user_row = contacts_df[contacts_df['patient_id'] == req.username]
-        
-        if user_row.empty:
+
+        username = str(req.username or "").strip()
+        password = str(req.password or "")
+        rows = _read_contact_rows()
+        user_row = next(
+            (
+                row for row in rows
+                if str(row.get("patient_id", "")).strip().lower() == username.lower()
+            ),
+            None,
+        )
+
+        if user_row is None:
             raise HTTPException(status_code=400, detail="User not found")
-        
-        user_data = user_row.iloc[0]
+
+        stored_password = str(user_row.get("password", "") or "")
+        if stored_password != password:
+            raise HTTPException(status_code=400, detail="Incorrect password")
+
         return {
             "success": True,
             "user": {
-                "username": user_data['patient_id'],
-                "phone": str(user_data['phone'])
+                "username": user_row["patient_id"],
+                "phone": str(user_row.get("phone", "") or ""),
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Login failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -6,6 +6,11 @@ import pandas as pd
 import random
 from pathlib import Path
 
+try:
+    from backend.app.prescription_rules import prescription_label_for
+except ModuleNotFoundError:
+    from prescription_rules import prescription_label_for
+
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data"
 INPUT_FILE = DATA_DIR / "products-export.xlsx"
@@ -44,10 +49,19 @@ else:
 # Add dummy stock levels (random)
 df["stock"] = [random.randint(10, 100) for _ in range(len(df))]
 
-# Add dummy prescription flags
-df["prescription_required"] = [
-    random.choice(["Yes", "No"]) for _ in range(len(df))
-]
+# Seed stock for demo purposes, but keep prescription flags deterministic.
+if "prescription_required" in df.columns:
+    df["prescription_required"] = df.apply(
+        lambda row: prescription_label_for(
+            row.get("medicine_name"),
+            row.get("prescription_required"),
+        ),
+        axis=1,
+    )
+else:
+    df["prescription_required"] = df["medicine_name"].apply(
+        lambda name: prescription_label_for(name, "No")
+    )
 
 # Save cleaned file
 df.to_csv(OUTPUT_FILE, index=False)
